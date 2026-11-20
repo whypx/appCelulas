@@ -11,8 +11,8 @@ android {
         applicationId 'br.cellcount.app'
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName '1.0.2'
+        versionCode 4
+        versionName '1.1.0'
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
     }
 
@@ -22,32 +22,17 @@ android {
     }
 }
 
-def pastaNucleo = layout.buildDirectory.dir('nucleoPython')
-def copiarNucleo = tasks.register('copiarNucleo', Sync) {
-    from(rootProject.projectDir.parentFile) {
-        include 'contador.py', 'analises.py'
-    }
-    into(pastaNucleo)
-}
-
 chaquopy {
     defaultConfig {
         version = '3.13'
-        def pythonLocal = rootProject.file('../.venv313/Scripts/python.exe')
-        if (pythonLocal.isFile()) {
-            buildPython(pythonLocal.absolutePath)
+        def caminhoPython = providers.gradleProperty('cellcountPython').orNull
+        if (caminhoPython) {
+            buildPython(caminhoPython)
         }
         pip { install 'Pillow==11.0.0' }
     }
-    sourceSets.getByName('main').srcDir(pastaNucleo.get().asFile)
 }
 
-tasks.configureEach {
-    if (name.endsWith('PythonSources')) {
-        dependsOn(copiarNucleo)
-        inputs.files(copiarNucleo)
-    }
-    if (it instanceof JavaCompile) {
-        options.encoding = 'UTF-8'
-    }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }

@@ -30,12 +30,11 @@ class SessaoCelular:
 
     def previa(self):
         destino = self.cache / "previa-contagem.png"
-        self.contador.desenhar_marcadores(mostrar_sugestoes=True).save(destino, compress_level=1)
+        self.contador.desenhar_marcadores().save(destino, compress_level=1)
         return str(destino)
 
     def marcar(self, x, y, distancia):
-        _, mensagem = self.contador.revisar_clique(x, y, distancia)
-        return mensagem
+        return self.contador.marcar_na_previa(x, y, distancia)
 
     def desfazer(self):
         if self.contador.desfazer_marcacao():
@@ -44,25 +43,7 @@ class SessaoCelular:
 
     def limpar(self):
         self.contador.limpar_marcacoes()
-        return "Marcações e sugestões limpas."
-
-    def detectar(self, limiar, claras, area_minima, area_maxima):
-        total = self.contador.detectar_celulas(limiar, claras, area_minima, area_maxima)
-        if total == 0:
-            return "Nenhuma sugestão. Ajuste o contraste, o limiar ou a área."
-        return f"Sugestões para revisar · {total}"
-
-    def incorporar(self, distancia):
-        if not self.contador.sugestoes:
-            return "Nenhuma sugestão para incorporar."
-        candidatas = len(self.contador.sugestoes)
-        adicionadas = self.contador.incorporar_sugestoes(distancia)
-        ignoradas = candidatas - adicionadas
-        return f"Pontos incorporados · {adicionadas}. Ignorados pela distância · {ignoradas}."
-
-    def descartar(self):
-        self.contador.sugestoes.clear()
-        return "Sugestões descartadas."
+        return "Marcações limpas."
 
     def salvar(self, amostra, observacoes):
         self.analises.salvar_analise(self.contador, amostra, observacoes)

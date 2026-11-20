@@ -1,4 +1,3 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv313",
     "java.configuration.updateBuildConfiguration": "interactive"
 }

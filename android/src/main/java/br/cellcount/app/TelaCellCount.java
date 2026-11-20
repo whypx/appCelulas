@@ -25,7 +25,6 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.chaquo.python.PyObject;
@@ -57,8 +56,7 @@ public final class TelaCellCount extends Activity {
     private ImagemAnalisavel imagem;
     private TextView numero, estado, arquivo, vazio;
     private LinearLayout historico, resultados;
-    private EditText amostra, observacoes, distancia, limiar, minima, maxima;
-    private Switch claras;
+    private EditText amostra, observacoes, distancia;
     private boolean ocupado, temImagem;
 
     @Override protected void onCreate(Bundle salvo) {
@@ -129,41 +127,13 @@ public final class TelaCellCount extends Activity {
         adicionarNaLinha(edicao, botao("Desfazer", false, () -> editar("desfazer")));
         adicionarNaLinha(edicao, botao("Limpar", false, this::confirmarLimpeza));
         comEspaco(cartaoImagem, edicao);
+        distancia = campo(cartaoImagem, "Distância mínima (px, 0 = desligada)", "8", InputType.TYPE_CLASS_NUMBER);
         comEspaco(conteudo, cartaoImagem);
-
-        LinearLayout cartaoDeteccao = cartao();
-        LinearLayout ajuste = coluna();
-        ajuste.setVisibility(View.GONE);
-        Button mostrar = botao("Detecção assistida ▾", false, () -> {
-            boolean expandir = ajuste.getVisibility() != View.VISIBLE;
-            ajuste.setVisibility(expandir ? View.VISIBLE : View.GONE);
-        });
-        comEspaco(cartaoDeteccao, mostrar);
-        claras = new Switch(this);
-        claras.setText("Células claras sobre fundo escuro");
-        claras.setTextColor(MARINHO);
-        comEspaco(ajuste, claras);
-        limiar = campo(ajuste, "Limiar de brilho (0 a 255)", "128", InputType.TYPE_CLASS_NUMBER);
-        LinearLayout areas = linha();
-        LinearLayout esquerda = coluna(), direita = coluna();
-        minima = campo(esquerda, "Área mínima (px²)", "25", InputType.TYPE_CLASS_NUMBER);
-        maxima = campo(direita, "Área máxima (0 = livre)", "0", InputType.TYPE_CLASS_NUMBER);
-        adicionarNaLinha(areas, esquerda);
-        adicionarNaLinha(areas, direita);
-        comEspaco(ajuste, areas);
-        comEspaco(ajuste, texto("Toque numa caixa de sugestão para rejeitá-la e incorpore as restantes.",
-            14, CINZA, false));
-        comEspaco(ajuste, botao("Detectar possíveis células", true, this::detectar));
-        comEspaco(ajuste, botao("Incorporar sugestões", false, () -> editarComDistancia("incorporar")));
-        comEspaco(ajuste, botao("Descartar todas", false, () -> editar("descartar")));
-        cartaoDeteccao.addView(ajuste);
-        comEspaco(conteudo, cartaoDeteccao);
 
         LinearLayout registro = cartao();
         comEspaco(registro, texto("Registrar análise", 19, MARINHO, true));
         amostra = campo(registro, "Nome da amostra", "", InputType.TYPE_CLASS_TEXT);
         observacoes = campo(registro, "Observações", "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        distancia = campo(registro, "Distância mínima (px, 0 = desligada)", "8", InputType.TYPE_CLASS_NUMBER);
         comEspaco(registro, botao("Salvar análise", true, this::salvar));
         comEspaco(registro, botao("Exportar imagem (PNG)", false, () -> escolherExportacao(PNG)));
         comEspaco(conteudo, registro);
@@ -295,26 +265,8 @@ public final class TelaCellCount extends Activity {
         if (limite >= 0) editar("marcar", x, y, limite);
     }
 
-    private void editarComDistancia(String metodo) {
-        int limite = lerInteiro(distancia, 0, 100);
-        if (limite >= 0) editar(metodo, limite);
-    }
-
-    private void detectar() {
-        int brilho = lerInteiro(limiar, 0, 255);
-        int menor = lerInteiro(minima, 1, Integer.MAX_VALUE);
-        int maior = lerInteiro(maxima, 0, Integer.MAX_VALUE);
-        if (brilho < 0 || menor < 0 || maior < 0) return;
-        if (maior > 0 && maior < menor) {
-            maxima.setError("Use 0 ou uma área maior ou igual à área mínima.");
-            return;
-        }
-        editar("detectar", brilho, claras.isChecked(), menor, maior);
-    }
-
     private void editar(String metodo, Object... argumentos) {
         if (ocupado || !exigirImagem()) return;
-        if (metodo.equals("detectar")) estado.setText("Detectando regiões…");
         executar("Não foi possível atualizar a contagem.", () -> {
             String mensagem = sessao().callAttr(metodo, argumentos).toString();
             Bitmap previa = lerPrevia();
@@ -323,9 +275,6 @@ public final class TelaCellCount extends Activity {
                 imagem.exibir(previa, false);
                 numero.setText(total);
                 estado.setText(mensagem);
-                if (metodo.equals("detectar") || metodo.equals("incorporar") || metodo.equals("descartar")) {
-                    telas[0].smoothScrollTo(0, 0);
-                }
             };
         });
     }
@@ -338,7 +287,7 @@ public final class TelaCellCount extends Activity {
 
     private void confirmarLimpeza() {
         if (ocupado || !exigirImagem()) return;
-        new AlertDialog.Builder(this).setMessage("Limpar as marcações e sugestões desta imagem?")
+        new AlertDialog.Builder(this).setMessage("Limpar as marcações desta imagem?")
             .setNegativeButton("Cancelar", null).setPositiveButton("Limpar", (d, b) -> editar("limpar")).show();
     }
 
