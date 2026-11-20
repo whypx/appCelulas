@@ -39,7 +39,7 @@ Conceitos. Strings, argumentos e retorno de um método.
 Solução. Em AplicacaoCellCount.limpar, altere o último return.
 
     # O mesmo contador, agora vazio, continua associado à imagem.
-    return self.atualizacao_contagem(contador, "Marcações limpas. Você pode recomeçar nesta imagem.")
+    return self.atualizar_contagem(contador, "Marcações limpas. Você pode recomeçar nesta imagem.")
 
 4. Criar um método que consulte o último ponto
 

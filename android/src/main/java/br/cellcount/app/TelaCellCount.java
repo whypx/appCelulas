@@ -151,7 +151,7 @@ public final class TelaCellCount extends Activity {
         adicionarNaLinha(areas, esquerda);
         adicionarNaLinha(areas, direita);
         comEspaco(ajuste, areas);
-        comEspaco(ajuste, texto("Toque numa caixa laranja para rejeitá-la. As demais podem ser incorporadas à contagem.",
+        comEspaco(ajuste, texto("Toque numa caixa de sugestão para rejeitá-la e incorpore as restantes.",
             14, CINZA, false));
         comEspaco(ajuste, botao("Detectar possíveis células", true, this::detectar));
         comEspaco(ajuste, botao("Incorporar sugestões", false, () -> editarComDistancia("incorporar")));

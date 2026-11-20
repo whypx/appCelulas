@@ -1,110 +1,91 @@
 CELLCOUNT — 04 | INTERFACE GRADIO
-=================================
+================================
 
-Gradio é uma biblioteca Python que monta uma interface para o navegador e
-liga ações do usuário a funções Python. No CellCount, a interface é criada
-em AplicacaoCellCount.construir_interface, em app.py. O método executar
-inicia o servidor local e passa o tema e o CSS ao Gradio.
+1. Comece pela tela
 
-1. Blocks, abas, linhas e colunas
+O Gradio cria uma página que executa métodos Python. Abra app.py e
+procure construir_interface. gr.Blocks cria a tela. O código dentro
+de with gr.Tab cria uma aba. gr.Row põe os componentes lado a lado.
+gr.Column coloca os itens um embaixo do outro. scale reparte a
+largura e min_width define a medida mínima da coluna.
 
-    with gr.Blocks(title="CellCount", analytics_enabled=False) as interface:
-        estado = gr.State()
+    with gr.Tab("Contagem"), gr.Row():
+        with gr.Column(scale=3, min_width=330, elem_classes="painel"):
 
-Blocks é o contêiner principal. `with` diz ao Gradio onde incluir o que
-é criado no bloco e `as interface` dá um nome ao objeto. Dentro dele,
-`with gr.Tab("Contagem")` cria uma aba. `with gr.Row()` agrupa itens lado
-a lado, e `with gr.Column(...)` empilha os itens internos. Na Contagem,
-scale=3 e scale=2 distribuem a largura entre esquerda e direita. min_width
-preserva espaço de leitura e as colunas podem quebrar a linha em telas
-estreitas. Mova um componente para dentro de outro bloco para mudar sua
-posição. Mantenha a referência dele nas conexões ao final do método.
+A primeira linha equivale a abrir um with para a aba e outro,
+interno, para a linha. A primeira coluna recebe o carregamento
+e a imagem. A segunda recebe os ajustes, os dados e a contagem.
 
-2. Componentes e botões
+2. Componentes que você pode alterar
 
-    amostra = gr.Textbox(label="Nome da amostra", placeholder="Ex.: Amostra A")
+    amostra = gr.Textbox(label="Nome da amostra")
     salvar = gr.Button("Salvar análise", variant="primary")
 
-Textbox recebe texto. label é o rótulo que acompanha o campo e
-placeholder aparece enquanto o valor está vazio. Button cria um botão,
-e variant="primary" aplica as cores de ação principal. File com
-type="filepath" fornece ao Python o caminho da cópia enviada ao Gradio.
-Image com interactive=False funciona como saída e ainda oferece o evento
-select. Slider fornece um número. Dataframe apresenta linhas e colunas.
-HTML mostra os indicadores gerados pela aplicação e Markdown cria títulos
-ou instruções curtas. DownloadButton recebe o caminho do PNG ou CSV e
-oferece o download ao usuário.
+label identifica o campo. variant escolhe a aparência do botão.
+File recebe o caminho de uma imagem carregada. Image mostra uma
+prévia e aciona select. Slider recebe um número pela barra.
+Checkbox retorna True quando fica marcado. Number recebe os
+limites de área. Accordion agrupa controles em uma área que abre
+e fecha. Dataframe organiza linhas e colunas. HTML recebe cartões
+montados por medida. DownloadButton disponibiliza um arquivo.
 
-3. Conectar eventos
+3. Ligue um botão a um método
 
-    gravacao = salvar.click(self.salvar, [estado, amostra, observacoes], status, **fila)
+    gravacao = salvar.click(self.salvar, [estado, amostra, notas], status, **fila)
 
-O primeiro argumento é o método, escrito sem parênteses para o Gradio
-chamá-lo no momento do clique. A lista de entradas passa ao método os
-valores de estado, amostra e observacoes nesta ordem. O retorno preenche
-status. `gravacao.success(...)` agenda uma atualização do histórico se
-a gravação terminar com sucesso. `gr.on` liga o carregamento da interface
-e a seleção das abas Histórico e Resultados à mesma leitura do histórico.
+A chamada .click registra um evento. self.salvar é uma referência
+ao método, sem executar ainda. Ao clicar, o Gradio pega os valores
+dos três componentes e passa para os parâmetros do método salvar
+na mesma ordem. O retorno vai para status. gravacao.success liga a
+próxima etapa, que atualiza o histórico após uma gravação bem-sucedida.
 
-4. Receber cliques na imagem
+4. Siga um clique na imagem
 
-    visualizacao.select(
-        self.marcar_celula, [estado, distancia], saidas_contagem,
-        trigger_mode="multiple", show_progress="hidden", **fila,
-    )
+    foto.select(self.marcar, [estado, distancia], saidas, trigger_mode="multiple", show_progress="hidden", **fila)
 
-marcar_celula recebe dois valores de componentes e mais um parâmetro
-`evento: gr.SelectData`. A anotação do tipo avisa ao Gradio para fornecer
-esse objeto com informações da seleção. evento.index contém X e Y em
-pixels da prévia. Gradio ajusta o tamanho exibido pelo navegador. O
-Python converte o ponto da prévia em coordenadas da imagem original.
-Na tabela, outro evento select entrega a linha em evento.row_value e o
-aplicativo lê seu identificador. Consulte a API oficial para os eventos.
+O parâmetro evento: gr.SelectData recebe dados do clique.
+evento.index tem X e Y na escala da prévia. O Gradio faz a primeira
+conversão, do tamanho exibido no navegador para os pixels da prévia.
+O núcleo faz a segunda, da prévia para a resolução original.
+Na tabela, o Gradio fornece evento.row_value e o aplicativo lê o ID
+na quinta posição. Para mais detalhes sobre eventos, consulte a API.
 https://gradio.app/docs/gradio/image
 https://gradio.app/docs/gradio/selectdata
 
-O Accordion Detecção assistida reúne um Radio para o contraste, um
-Slider para o limiar e dois Number para os limites de área. Os botões
-Detectar possíveis células, Incorporar sugestões e Descartar todas
-usam a mesma fila e a mesma lista de saídas que os cliques na imagem.
+5. Saiba o que muda na tela
 
-5. Atualizar componentes e usar estado
+    saidas = [estado, foto, total, status, png]
 
-    saidas_contagem = [estado, visualizacao, total, total_atual, status, baixar_png]
+atualizar_contagem devolve cinco valores nessa ordem. gr.State
+guarda o contador da sessão, que inclui listas e a prévia limpa.
+A imagem anotada vai para foto. O HTML vai para total. O texto
+de retorno vai para status. A quinta saída esconde um PNG anterior
+que ficou desatualizado. O carregamento recebe mais três saídas
+para atualizar a resolução e esvaziar os campos da análise anterior.
 
-atualizacao_contagem devolve seis valores na mesma ordem: objeto da
-sessão, imagem, dois indicadores, mensagem e atualização do download.
-O Gradio troca apenas esses componentes. gr.skip() preserva a saída
-correspondente, como em sem_edicao, que muda só a mensagem. `gr.update`
-permite trocar valor e visibilidade juntos. Um download começa oculto e
-recebe `gr.update(value=str(destino), visible=True)` ao ficar pronto.
+Em exibir_mensagem, gr.skip() preserva as outras saídas, enquanto
+status recebe o texto. gr.update(value=..., visible=...) permite
+trocar caminho e visibilidade juntos ao liberar o download.
+Os cartões de Resultados são calculados ao abrir a aba ou salvar.
 
-gr.State() começa com None. O valor fica no servidor para aquela aba
-do navegador. carregar_imagem devolve o novo ContadorCelulas e o Gradio
-o envia aos próximos eventos da sessão. As marcações em memória e os
-registros JSON têm ciclos diferentes: o objeto acompanha a sessão e
-o JSON permanece após fechar o programa.
+O dicionário fila é passado aos eventos com **fila. O mesmo
+concurrency_id com concurrency_limit=1 organiza as ações em ordem.
+trigger_mode="multiple" aceita cliques enquanto há ações na fila.
+api_visibility="private" restringe os eventos ao funcionamento da
+interface. gr.on registra a mesma atualização para o carregamento
+inicial e a seleção das abas Histórico e Resultados.
 
-O dicionário fila tem concurrency_id, concurrency_limit e api_visibility.
-`**fila` passa as opções para os eventos sem repetir o texto. O mesmo
-identificador de fila com limite 1 executa uma edição da contagem por vez.
-trigger_mode="multiple" aceita cliques sucessivos mesmo com edição na
-fila. show_progress="hidden" evita cobrir a imagem entre marcações.
-api_visibility="private" mantém os eventos destinados à interface.
+6. Troque a aparência
 
-6. Tema e CSS
+No início de app.py, CSS guarda o estilo em um texto de várias
+linhas. elem_id="marca" liga o cabeçalho à regra #marca.
+elem_classes="painel" liga cartões à regra .painel. .medidas reúne
+os três indicadores e flex-wrap permite que quebrem a linha em
+telas estreitas. var(--border-color-primary) lê a cor do tema.
+Em executar, gr.themes.Soft(...).set(...) define as opções do tema
+e .launch aplica o tema e o CSS na inicialização da tela.
 
-A variável CSS no começo de app.py é uma string com regras de estilo.
-`elem_id="cabecalho"` produz o identificador escolhido pelo seletor
-`#cabecalho`. `elem_classes="painel"` aplica a classe `.painel`, usada
-em vários cartões. Uma regra tem seletor, chaves e pares propriedade
-e valor. `border-radius: 14px;` arredonda os cantos de `.painel`.
-`var(--border-color-primary)` usa uma cor do tema. O bloco `@media`
-ajusta espaçamentos quando a tela tem até 640 pixels de largura.
-
-O tema Soft sugere cores para os componentes nativos. `set(...)` muda
-cores pontuais, como o fundo e o botão primário. O HTML do cabeçalho
-traz o nome, a referência PIBIC-EM / UFRN e um símbolo simples. Em
-indicador, a classe CSS realça o número em `<strong>` e `aria-live`
-ajuda tecnologias assistivas a anunciar mudanças. Reinicie app.py
-após editar o CSS e recarregue a página para ver a alteração.
+Experimente mudar border-radius: 14px em .painel para 20px.
+Reinicie o programa e confira os cantos dos cartões. Para trocar a
+cor do marcador, mude COR_MARCADOR em contador.py. É Pillow que
+desenha sobre a imagem, por isso o marcador também muda no PNG.

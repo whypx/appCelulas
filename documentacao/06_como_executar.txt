@@ -62,15 +62,15 @@ que aparece no seu terminal. Pressione Ctrl+C no terminal para encerrar.
    clique em Salvar análise. Cada salvamento cria um registro novo.
    Salve a contagem antes de trocar a imagem ou fechar a página.
 
-Para usar a contagem assistida, abra Detecção assistida abaixo da
-imagem. Escolha Escuras ou Claras conforme o contraste da amostra e
-clique em Detectar possíveis células. Se detectar poucas células
+Para usar a contagem assistida, abra Detecção assistida na aba
+Contagem. Marque Células claras sobre fundo escuro se for o caso
+da amostra e clique em Detectar possíveis células. Se detectar poucas células
 escuras, experimente aumentar o limiar. Para células claras, tente
 diminuí-lo. Aumente a área mínima para filtrar pontos pequenos e use
 a área máxima para limitar regiões grandes. As áreas são estimadas
 em pixels² da imagem original. Área máxima 0 deixa o limite aberto.
 
-Cada caixa laranja é uma sugestão. Clique dentro de uma caixa para
+Cada caixa roxa é uma sugestão. Clique dentro de uma caixa para
 rejeitá-la, fora das caixas para marcar manualmente, ou use Descartar
 todas para reiniciar a revisão. Incorpore as caixas restantes com
 Incorporar sugestões. Só os pontos confirmados entram no total e nas

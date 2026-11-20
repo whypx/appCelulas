@@ -21,7 +21,7 @@ histórico funcionam no aparelho com arquivos disponíveis localmente.
   Ampliar. Com zoom, arraste a imagem para navegar. Ajustar restaura o
   enquadramento. O marcador corresponde à posição da imagem tocada.
 • Abra Detecção assistida para selecionar contraste, limiar e área.
-  Detectar possíveis células mostra caixas laranja. Toque numa caixa
+  Detectar possíveis células mostra caixas roxas. Toque numa caixa
   para excluí-la da revisão e role para Incorporar sugestões quando
   terminar. Células vizinhas e diferenças de iluminação exigem revisão.
 • Use Desfazer para remover o último ponto e Limpar para apagar as

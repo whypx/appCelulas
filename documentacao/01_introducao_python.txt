@@ -19,7 +19,7 @@ expressão à direita antes de guardar o resultado no nome à esquerda.
 total é int (inteiro), distancia é float (número com parte decimal),
 marcado é bool (True ou False) e None indica ausência de valor. Você
 pode experimentar print(type(total)) e ver <class 'int'>.
-Em app.py, atualizacao_contagem começa com imagem = None e total = 0.
+Em app.py, atualizar_contagem começa com foto = None e total = 0.
 Ao receber um contador, troca essas referências por uma imagem Pillow e
 pelo total retornado pelo método obter_total.
 

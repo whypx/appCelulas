@@ -3,8 +3,11 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 
+ERROS_IMAGEM = (OSError, ValueError, Image.DecompressionBombError)
+
+
 class ContadorCelulas:
-    FORMATOS = {  # noqa: RUF012
+    FORMATOS = {
         ".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG",
         ".tif": "TIFF", ".tiff": "TIFF",
     }
@@ -92,16 +95,10 @@ class ContadorCelulas:
 
     def _criar_mascara(self, limiar, claras):
         tons = self.previa.convert("L")
-        tabela = []
+        tabela = [0] * 256
         for tom in range(256):
-            if claras:
-                selecionado = tom >= limiar
-            else:
-                selecionado = tom <= limiar
-            if selecionado:
-                tabela.append(255)
-            else:
-                tabela.append(0)
+            if (claras and tom >= limiar) or (not claras and tom <= limiar):
+                tabela[tom] = 255
 
         mascara = tons.point(tabela)
         if self.previa.mode == "RGBA":

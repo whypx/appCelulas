@@ -12,7 +12,7 @@ vazia. Remover ou trocar o arquivo reinicia a análise em andamento.
 
 2. Identificar o clique
 
-O método marcar_celula roda no evento select de visualizacao. O Gradio
+O método marcar roda no evento select de foto. O Gradio
 manda evento.index com a posição do clique, ajustada ao tamanho da
 prévia. O contador confere se o ponto cabe dentro dos limites da imagem.
 
@@ -53,9 +53,10 @@ arquivamento guarda seus bytes originais.
 
 6. Atualizar o total
 
-obter_total() calcula len(self.marcacoes). atualizacao_contagem entrega
-a nova imagem, os números para as abas Contagem e Resultados e uma
-mensagem com as coordenadas do último ponto aceito. O clique vale
+obter_total() calcula len(self.marcacoes). atualizar_contagem entrega
+a nova imagem, o total da aba Contagem e uma mensagem com as
+coordenadas do último ponto aceito. A aba Resultados lê a mesma
+lista quando é aberta. O clique vale
 imediatamente e a página continua aberta. Os eventos entram numa fila
 para atualizar a lista em ordem.
 
@@ -97,7 +98,7 @@ e pode ser gerado a qualquer momento após o carregamento.
 A partir da prévia em tons de cinza, o limiar seleciona pixels escuros
 ou claros. O contador agrupa os pixels vizinhos pelos quatro lados.
 Cada grupo separado que passa pelo filtro de área gera uma sugestão
-com uma caixa laranja. Regiões que tocam a borda ficam para revisão
+com uma caixa roxa. Regiões que tocam a borda ficam para revisão
 manual. A área usada para filtrar é estimada na resolução original.
 
 Ao clicar numa caixa, você rejeita aquela sugestão. Ao incorporar as

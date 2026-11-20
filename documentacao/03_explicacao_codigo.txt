@@ -1,9 +1,12 @@
 CELLCOUNT — 03 | EXPLICAÇÃO DO CÓDIGO-FONTE
 ===========================================
 
-Siga a ordem contador.py, analises.py e app.py. No VS Code, procure pelo
-nome do método com Ctrl+F. Os recortes mantêm as expressões do projeto.
-Para entender como testar cada mudança, combine este guia com o 07.
+Se estiver começando, leia primeiro o guia 01. Depois acompanhe
+contador.py, analises.py e app.py nesta ordem. No VS Code, use
+Ctrl+F para buscar o método citado. Ao ler um trecho, anote o valor
+que entra, o que muda durante a execução e o valor que sai. Use o
+exercício executável do guia 09 para acompanhar o resultado e o
+guia 07 para praticar alterações. A seção 4 liga o núcleo ao Android.
 
 
 1. contador.py | A imagem e os pontos de uma análise
@@ -17,6 +20,10 @@ Path trabalha com caminhos no Windows e no Colab. Image decodifica a
 imagem, ImageOps corrige a orientação, ImageDraw desenha sobre a imagem
 em memória e ImageChops combina máscaras. A declaração
 `class ContadorCelulas:` abre o corpo da classe.
+ERROS_IMAGEM reúne os tipos de exceção que o navegador e o histórico
+tratam. OSError cobre arquivo ilegível, ValueError cobre dados ou
+formato inválidos e Image.DecompressionBombError sinaliza que a
+quantidade de pixels supera o limite do Pillow.
 O dicionário FORMATOS relaciona a extensão, com ponto inicial, ao formato
 que o Pillow informa. LIMITE_PREVIA é o máximo em pixels de cada lado.
 RAIO_MARCADOR, COR_MARCADOR e COR_CONTORNO definem estilo e tamanho.
@@ -118,7 +125,8 @@ As entradas X e Y estão em pixels da prévia. A comparação encadeada
 para sinalizar o caso inválido. Some 0.5 para usar o centro do pixel e
 multiplique pela razão entre original e prévia em cada eixo. int descarta
 a parte fracionária de um número positivo, selecionando o pixel original
-que contém o ponto. A tupla retornada alimenta marcar_celula em app.py.
+que contém o ponto. revisar_clique recebe a tupla antes de decidir
+se um clique rejeita uma caixa ou adiciona uma célula.
 Se mudar o tamanho da prévia, a relação se ajusta com `.width` e `.height`.
 
 1.5. Registrar pontos em adicionar_celula
@@ -180,10 +188,11 @@ chame obter_total() para ler o total sem precisar somar ou subtrair à mão.
     mascara = tons.point(tabela)
 
 _criar_mascara usa a prévia limpa e converte suas cores para tons de
-cinza de 0 a 255. O for com range(256) preenche tabela com 256 valores.
-Se claras for True, compara `tom >= limiar`. Para células escuras,
-compara `tom <= limiar`. O booleano selecionado decide se append
-acrescenta 255 ou 0. point troca cada tom pelo valor de sua posição em
+cinza de 0 a 255. `tabela = [0] * 256` prepara uma lista de zeros.
+O for percorre `range(256)`. Para células claras, a condição aceita
+`tom >= limiar`. Para escuras, aceita `tom <= limiar`. Quando uma
+dessas combinações é verdadeira, `tabela[tom] = 255` troca o zero
+pelo valor de um pixel ativo. point troca cada tom pelo valor de sua posição em
 tabela. ImageChops.multiply combina essa máscara com a banda alfa
 quando a imagem é RGBA. Os pixels transparentes viram zero.
 
@@ -205,6 +214,14 @@ atualiza a área, a soma das coordenadas e os limites da caixa. Cada
 vizinho ativo acima, abaixo, à esquerda ou à direita entra na pilha
 com append. Quando um pixel entra, seu valor vira zero na lista para
 evitar revisitas. A imagem e a prévia continuam intactas.
+
+Exemplo de uma região em uma imagem de 6 × 5 pixels. Suponha que os
+únicos pixels ativos sejam (2, 1), (3, 1), (2, 2) e (3, 2). Os índices
+no bytearray são 8, 9, 14 e 15, pois o índice é Y vezes 6 mais X.
+Começando por 8, o método encontra 9 e 14 ao examinar os vizinhos.
+Ao final, mede área 4, caixa (2, 1, 3, 2) e centro (2.5, 1.5).
+Se as duas resoluções coincidirem, coordenadas_originais devolve
+(3, 2), porque soma 0.5 ao centro antes de converter para inteiros.
 
 _medir_regiao devolve área, centro e caixa. O centro vem das médias
 `soma_x / area` e `soma_y / area`. Depois de medir a região,
@@ -252,7 +269,7 @@ e recebe o anel ciano. A ausência de preenchimento mantém o centro
 visível. `return imagem` devolve o resultado ao Gradio ou à exportação.
 Para alterar o tamanho, ajuste RAIO_MARCADOR e confira se sobra centro.
 Quando `mostrar_sugestoes=True` e a saída é uma prévia, `rectangle`
-desenha as caixas laranja antes dos círculos. Exportação e histórico
+desenha as caixas roxas antes dos círculos. Exportação e histórico
 usam o valor padrão False e mostram apenas marcações confirmadas.
 
 
@@ -349,216 +366,215 @@ os nomes de CAMPOS_CSV. O laço `for campo in self.CAMPOS_CSV` lê
 os valores na mesma ordem. texto_csv trata os campos de TEXTOS_CSV.
 `json.dumps` transforma marcacoes em uma string JSON que ocupa uma
 célula do CSV. Para mudar a ordem das colunas, edite CAMPOS_CSV.
-app.py fornece o
-caminho e, após a escrita, oferece o arquivo para download.
+app.py fornece o caminho e, após a escrita, oferece o arquivo para download.
+
+2.5. Reconstituir a análise em rever_analise
+
+    detalhes, foto = self.analises.rever_analise(registro)
+
+As duas interfaces usam esse método. A entrada é o dicionário já
+carregado por carregar_analise. As f-strings organizam ID, amostra,
+arquivo, dimensões, data, total e observações. Cada \n inicia uma linha.
+Quando as observações estão vazias, or escolhe "Sem observações".
+
+O método tenta criar ContadorCelulas com o caminho da cópia original.
+ERROS_IMAGEM cobre uma cópia ausente ou ilegível. Nesse caso, retorna
+os detalhes com um aviso e None no lugar da foto. Se abrir, o método
+coloca os pontos salvos em contador.marcacoes e chama desenhar_marcadores.
+O resultado é uma tupla com texto e imagem pronta para a tela. A
+contagem em andamento tem seu próprio objeto e continua independente.
 
 
-3. app.py | Interface, eventos e integração
+3. app.py | Interface web e ligação com as regras
 
-3.1. Importações, CSS e inicialização
+3.1. Importações, configuração e ponto de entrada
 
-os permite ler variáveis de ambiente e sys fornece a lista de módulos já
-carregados. Path monta caminhos, TemporaryDirectory cria uma área de
-exportação temporária e uuid4 evita choque entre arquivos.
-gradio com apelido gr cria componentes e eventos. A importação de Image
-permite tratar `Image.DecompressionBombError`, sinal de imagem grande
-demais para o limite do Pillow. Os imports dos dois módulos locais dão à
-interface acesso às classes de contagem e armazenamento.
-
-CSS é uma string de aspas triplas. Os seletores #cabecalho,
-#visualizacao e #contagem-principal apontam para valores elem_id
-atribuídos no Gradio. .marca, .simbolo, .painel e .indicador se aplicam
-por classes. `var(...)` lê cores do tema. @media ajusta o cabeçalho e
-o espaçamento em telas estreitas. Alterar border-radius muda os cantos.
-
-    def __init__(self, pasta_dados=None):
-        if pasta_dados is None:
-            pasta_dados = Path(__file__).resolve().parent / "dados"
-
-__file__ contém o caminho do módulo app.py. resolve torna o caminho
-absoluto, parent vai à pasta que contém o módulo e `/ "dados"` aponta
-para a pasta padrão, independente da pasta atual do terminal. Passe
-outro caminho para usar dados isolados. O construtor cria self.analises,
-self.exportacoes e self.interface. TemporaryDirectory devolve um objeto,
-mantido enquanto a aplicação existir. A classe também guarda SEM_IMAGEM,
-mensagem reutilizada, e ERROS_IMAGEM, uma tupla de tipos de exceção.
-
-3.2. Indicador e componentes de construir_interface
-
-    return (
-        '<div class="indicador" aria-live="polite">'
-        f"<span>{titulo}</span><strong>{total}</strong></div>"
-    )
-
-indicador recebe um título fixo do aplicativo e um total. Strings
-adjacentes dentro dos parênteses formam uma só. A f-string insere título
-e número nas chaves. O HTML usa span para o texto, strong para o número
-e aria-live para anunciar a atualização. Mude títulos nos pontos de
-chamada ou o estilo do número na regra .indicador strong.
-
-`with gr.Blocks(title="CellCount", analytics_enabled=False) as interface`
-inicia o layout. `estado = gr.State()` separa o estado da contagem por
-sessão. O HTML seguinte cria o cabeçalho estático. Cada `with gr.Tab`
-cria uma aba. gr.Row reúne elementos lado a lado. gr.Column agrupa
-componentes na vertical e scale dá a largura relativa entre as colunas.
-gr.Markdown com ## cria os títulos menores da interface.
-
-• Contagem à esquerda. arquivo é gr.File, com extensões tiradas das
-  chaves de FORMATOS via `list(...)`. type="filepath" fornece o caminho
-  em texto. info_imagem é um Textbox de leitura. visualizacao é gr.Image
-  de saída, com imagem Pillow em PNG, botão de tela cheia e texto
-  alternativo. A altura CSS usa 44% da altura da janela, com mínimo de
-  320 e máximo de 520 pixels. Desfazer e Limpar marcações ocupam uma linha.
-• Contagem à direita. total recebe o HTML com o número. status é um
-  Textbox de leitura com o estado da análise. amostra e observacoes
-  recebem texto. O Slider tem mínimo, máximo, valor inicial e passo.
-  Salvar usa variant="primary". baixar_png é um DownloadButton que começa
-  invisível e só recebe o caminho de um arquivo quando a geração dá certo.
-• Histórico. tabela tem cabeçalhos em ordem fixa e tipos de coluna em
-  datatype. `value=[]` inicia a tabela sem registros. Texto de resumo,
-  exportação CSV e detalhes são componentes separados. Accordion esconde
-  a segunda tabela de coordenadas até que o usuário queira consultá-la.
-  imagem_historico usa a prévia renderizada a partir da imagem arquivada.
-• Resultados. Três gr.HTML usam indicador para mostrar a contagem atual,
-  número de registros e soma das células salvas. Começam em zero e são
-  atualizados pelos eventos correspondentes.
-
-Para modificar o layout, use as linhas e colunas. Mantenha compatíveis
-os tipos de componentes e os valores que os métodos devolvem.
-
-3.3. Conectar eventos em construir_interface
-
-    saidas_contagem = [estado, visualizacao, total, total_atual, status, baixar_png]
-
-Os eventos `.change`, `.select` e `.click` registram a referência a um
-método. O segundo argumento posicional, quando fornecido, é a entrada
-ou lista de entradas. O terceiro indica saídas, na ordem do return.
-`saidas_contagem + [info_imagem, amostra, observacoes]` concatena listas
-para o carregamento, que também muda informação e campos da amostra.
-`**fila` desempacota as opções do dicionário. concurrency_id igual e
-limite 1 põem as operações de edição na mesma fila. trigger_mode
-"multiple" recebe seleções sucessivas. show_progress="hidden" mantém a
-imagem disponível durante o redesenho. Os eventos usam API privada.
-
-`gravacao = salvar.click(...)` guarda a referência do evento. Seu
-`.success` atualiza as saídas do histórico só ao concluir a gravação.
-`gr.on` conecta interface.load e a seleção de duas abas à mesma função.
-tabela.select recebe dados da linha por gr.SelectData. Dois botões
-chamam as funções de exportação e preenchem componentes DownloadButton.
-O método retorna interface. Ao acrescentar uma saída de evento, ajuste
-as posições do retorno e das saídas no mesmo ponto do programa.
-
-3.4. Atualizar, carregar ou recusar um ponto
-
-    if contador is not None:
-        imagem = contador.desenhar_marcadores(mostrar_sugestoes=True)
-        total = contador.obter_total()
-
-atualizacao_contagem começa com imagem None e total 0. Se há contador,
-calcula a prévia e o total. Retorna a tupla com o estado, a imagem, dois
-HTMLs, a mensagem e `gr.update(value=None, visible=False)`, que esconde
-o PNG anterior ao editar. `sem_edicao` devolve seis valores na mesma
-ordem, mas gr.skip() preserva cada saída onde é aplicado. Só a mensagem
-muda. Use esse método para informar uma tentativa sem redesenhar.
-
-carregar_imagem recebe o caminho do File. Em None, devolve a atualização
-vazia somada à tupla `("", "", "")` de informação, nome e observações
-em branco. Um try busca construir o objeto. `except self.ERROS_IMAGEM`
-trata formatos inválidos e outros erros de abertura. No sucesso, a
-f-string info usa nome, largura e altura. A saída também zera os campos
-de nome e observações para uma nova amostra. Para mudar o texto de
-orientação, edite mensagem na condição desejada.
-
-    def marcar_celula(self, contador, distancia, evento: gr.SelectData):
-
-O tipo anotado fornece evento automaticamente ao método. contador e
-distancia vêm de estado e slider. Antes de converter, o método confere
-contador e verifica com isinstance e len se evento.index tem dois itens.
-`x_previa, y_previa = evento.index` lê a dupla. revisar_clique executa
-a conversão, a decisão e devolve mudou, mensagem. `except (TypeError, ValueError)`
-cobre coordenadas incompatíveis com o cálculo e pontos fora dos limites.
-Se mudou for True, atualizacao_contagem redesenha a prévia. Se for False,
-sem_edicao mantém os demais componentes. Ajuste as regras de clique
-em contador.py para que computador e celular usem a mesma lógica.
-
-Desfazer verifica None e consulta desfazer_marcacao. Sem ponto, usa
-sem_edicao com uma mensagem. Limpar verifica None e chama
-limpar_marcacoes. Os dois chamam atualizacao_contagem se modificarem ou
-esvaziarem a lista. A imagem aberta e os dados da amostra continuam.
-
-detectar, incorporar e descartar recebem o contador da sessão e usam
-as mesmas saídas dos outros botões de edição. detectar valida o intervalo
-de área e converte a escolha do Radio em um booleano com `contraste == "Claras"`.
-incorporar subtrai as adições do número de sugestões para informar
-quantos pontos a proteção de distância ignorou. descartar chama clear
-apenas em sugestoes, preservando a contagem confirmada.
-
-3.5. Salvar e consultar
-
-    amostra = (amostra or "").strip()
-    if not amostra:
-        raise gr.Error("Informe o nome da amostra antes de salvar.")
-
-salvar exige contador e nome com conteúdo. `or ""` converte um campo
-ausente em texto vazio e strip retira os espaços das extremidades.
-gr.Error é exibido pelo Gradio. Após validar, a função passa contador,
-amostra e as observações, que podem estar vazias, ao gerenciador.
-`except OSError as erro` dá um nome à exceção anterior.
-`raise ... from erro` preserva a causa junto à mensagem clara da tela.
-O return de sucesso alimenta status e permite atualizar o histórico.
-
-atualizar_historico cria `linhas = []` e `total_celulas = 0`. Para cada
-registro, strftime com `%d/%m/%Y %H:%M:%S %z` converte a data ao formato
-dia/mês/ano, hora:minuto:segundo e fuso. append adiciona uma lista com
-cinco valores na ordem da tabela. `+=` soma o total do registro ao
-acumulado. Se a leitura falhar, gr.Error informa o problema. Se as linhas
-existirem, troca a mensagem inicial por uma instrução de seleção. As
-saídas são a tabela, a mensagem e os dois indicadores de dados gravados.
-Se alterar as colunas, mantenha consistente o índice usado ao selecionar.
-
-    linha = evento.row_value
-    identificador = linha[4]
-
-consultar_analise recebe um evento da tabela. gr.skip preserva as
-saídas se a linha estiver vazia, incompleta ou sem identificador.
-Na lista, índice 4 é a quinta coluna, que contém o ID. O primeiro try
-lê o dicionário, monta detalhes com f-strings
-e quebras `\n`, e recupera a lista de pontos e o caminho da imagem.
-`registro['observacoes'] or 'Sem observações'` usa o segundo texto quando
-o primeiro está vazio. O segundo try cria um contador temporário e coloca
-os pontos guardados em `contador.marcacoes`. Ele gera a prévia como na
-contagem normal. Se o arquivo estiver indisponível, retorna imagem None
-e acrescenta uma mensagem aos detalhes. A saída afeta apenas os três
-componentes do histórico. Acrescente informações ao texto detalhes
-quando precisar exibir mais uma chave do registro.
-
-3.6. Exportar e executar
-
-    pasta = Path(self.exportacoes.name) / uuid4().hex
-    pasta.mkdir()
-    return pasta / nome
-
-caminho_exportacao cria uma subpasta temporária para cada pedido. Dois
-arquivos podem ter o mesmo nome de download sem ocupar o mesmo caminho.
-exportar_imagem recebe o contador do estado e verifica se existe. Seu
-try gera `desenhar_marcadores(resolucao_original=True).save(destino)`.
-O argumento True manda desenhar em tamanho original. `.save` encontra
-o formato pela extensão .png. exportar_resultados chama exportar_csv
-com o caminho para .csv. As duas funções retornam gr.update com o
-caminho convertido para string e visible=True, para exibir o arquivo
-no navegador. Mude o nome ali se quiser outro nome de download.
-
-executar procura COLAB_RELEASE_TAG em os.environ ou google.colab em
-sys.modules. Se encontrar algum deles, passa share e debug como True
-para o Gradio. No Windows, o servidor fica local. O tema Soft especifica
-paleta e fontes do sistema. `.set(...)` troca
-cores de fundo, rótulo e botão. `self.interface.launch` inicia o servidor
-com CSS, tema e footer_links=[] para omitir os links de rodapé.
+gradio recebe o apelido gr. Os imports locais trazem ContadorCelulas,
+ERROS_IMAGEM e GerenciadorAnalises. Path monta caminhos. TemporaryDirectory
+cria a área dos downloads e uuid4 fornece nomes únicos. os.environ e
+sys.modules ajudam a reconhecer o Colab em executar.
 
     if __name__ == "__main__":
         AplicacaoCellCount().executar()
 
-Ao executar `python app.py`, Python define __name__ como "__main__" e
-chama executar na instância recém-criada. Ao importar a classe, a
-condição não se cumpre. Isso permite que o notebook Colab importe a
-classe e decida em qual célula iniciar o servidor.
+Quando você roda app.py, __name__ vale "__main__" e as duas chamadas
+criam a aplicação e iniciam o servidor. Ao importar a classe, essa
+condição fica falsa. __init__ aceita pasta_dados opcional. Quando é
+None, __file__ indica o arquivo do programa. Path(...).resolve().parent
+localiza sua pasta e / "dados" escolhe a pasta de armazenamento.
+self.analises guarda o gerenciador, self.exportacoes guarda a pasta
+temporária e self.interface recebe a tela criada em construir_interface.
+
+Em executar, colab recebe True se o ambiente tiver COLAB_RELEASE_TAG
+ou se google.colab estiver carregado. O Gradio recebe esse valor em
+share e debug. O tema Soft aplica fontes e cores aos controles.
+CSS é a string de estilo. #marca representa o cabeçalho, #imagem
+define o fundo da prévia e o cursor, .painel define os cartões, .medidas organiza os
+indicadores e #total realça a contagem ativa. gr.HTML recebe o código
+do cabeçalho e dos indicadores. medida recebe um rótulo e um número
+e monta um cartão com span e strong. aria-live permite anunciar
+mudanças aos leitores de tela. Para ajustar as cores, edite CSS
+ou as opções do tema. Para trocar texto, procure o rótulo do controle.
+
+3.2. Construir a tela
+
+    with gr.Blocks(title="CellCount", analytics_enabled=False) as tela:
+        estado = gr.State()
+
+with indica ao Gradio onde colocar os componentes. as tela dá um
+nome ao objeto principal. gr.State guarda um contador por sessão e
+começa com None. A linha abaixo reúne dois contextos. O Gradio cria
+a linha dentro da aba.
+
+    with gr.Tab("Contagem"), gr.Row():
+
+• Contagem. A primeira coluna tem o arquivo, a resolução, a foto e os
+  botões Desfazer e Limpar. gr.File usa as chaves de FORMATOS como
+  extensões aceitas. gr.Image mostra a prévia PNG e oferece tela
+  cheia. A segunda coluna tem o contador, a mensagem, os dados da
+  amostra e a distância mínima. No Accordion, Checkbox escolhe
+  células claras, Slider controla brilho e os dois Number recebem
+  limites de área. Um botão gera o PNG e DownloadButton o disponibiliza.
+• Histórico. Dataframe mostra uma linha por análise. headers fixa
+  a ordem das colunas e datatype indica seus tipos. O Textbox à
+  esquerda mostra os detalhes após a seleção. O Accordion guarda a
+  tabela X e Y e a imagem volta a aparecer quando estiver disponível.
+  O botão CSV gera um download com todos os registros.
+• Resultados. Um gr.HTML recebe as três medidas juntas. Os cartões
+  são calculados ao abrir a aba, carregar a tela ou salvar uma análise.
+
+3.3. Ligar botões, entradas e saídas
+
+    saidas = [estado, foto, total, status, png]
+    arquivo.change(self.carregar_imagem, arquivo, saidas + [info, amostra, notas], **fila)
+
+change chama carregar_imagem ao alterar o arquivo. O segundo argumento
+é a entrada e o terceiro define os componentes que recebem o retorno.
+Somar listas acrescenta três componentes à lista base. O retorno
+deve ter a mesma ordem e o mesmo tamanho. **fila envia as opções
+como argumentos nomeados. O concurrency_id compartilhado, com limite
+1, deixa uma ação de cada vez editar a contagem. api_visibility
+mantém essas ações vinculadas à interface.
+
+foto.select chama marcar com estado e distancia. A anotação
+evento: gr.SelectData faz o Gradio fornecer os dados do clique.
+trigger_mode multiple permite enfileirar vários cliques e
+show_progress hidden mantém a imagem visível durante a edição.
+Os botões chamam seus métodos com .click. gr.on junta tela.load e
+as duas seleções de aba para executar a mesma leitura. gravacao.success
+dispara a leitura do histórico quando salvar termina com sucesso.
+Os eventos de PNG e CSV recebem os arquivos gerados e os oferecem
+nos respectivos botões de download.
+
+3.4. O caminho de uma edição
+
+atualizar_contagem recebe um contador e uma mensagem. Se existe
+imagem, desenha os marcadores e as sugestões e lê o total. A tupla
+retornada tem cinco posições. O contador volta para estado, a
+imagem para foto, o HTML para total, a mensagem para status e
+gr.update(value=None, visible=False) esconde o download anterior.
+Ao retornar gr.skip(), exibir_mensagem preserva o componente
+correspondente. Apenas o quarto valor é uma mensagem nova.
+
+carregar_imagem inicia contador, info e mensagem com None,
+texto vazio e a instrução de upload. O try cria ContadorCelulas.
+except ERROS_IMAGEM trata a falha. O else descreve a imagem se
+a abertura terminou normalmente. A saída inclui a resposta padrão
+mais a resolução, o nome da amostra vazio e as observações vazias.
+
+    x, y = evento.index
+    mudou, mensagem = contador.revisar_clique(x, y, distancia)
+
+O primeiro desempacotamento recebe as coordenadas da prévia.
+O segundo recebe o booleano e a mensagem do núcleo. Em um clique
+aceito ou numa caixa rejeitada, mudou vale True e a foto volta
+redesenhada. Clique duplicado atualiza só status. TypeError e
+ValueError são capturados para mostrar um aviso de coordenadas.
+
+desfazer testa o booleano de desfazer_marcacao. limpar esvazia
+marcações e sugestões. detectar verifica campos vazios e limites.
+Área mínima começa em 1. Área máxima de 0 aceita qualquer área
+acima do mínimo. Se for positiva, precisa ser pelo menos a mínima.
+detectar_celulas devolve a quantidade de caixas para revisar.
+incorporar guarda a quantidade pendente antes da edição, subtrai
+as adicionadas e informa quantas a distância mínima ignorou.
+descartar usa clear() somente na lista de sugestões.
+
+3.5. Salvar, atualizar e consultar o histórico
+
+salvar exige um contador e um nome com conteúdo. (amostra or "")
+troca None por texto vazio e strip retira espaços das pontas.
+As observações são opcionais. O método do gerenciador copia o
+arquivo e grava o JSON. Se houver erro de disco, raise gr.Error(...)
+from erro mostra uma mensagem e conserva a causa técnica.
+
+    linhas.append([registro["amostra"], registro["imagem"], registro["total"], data, registro["id"]])
+    total_salvo += registro["total"]
+
+atualizar_historico percorre os registros guardados em disco.
+append cria uma linha na mesma ordem dos headers. += soma as
+células gravadas. O contador atual dá a primeira medida dos
+resultados. Quando é None, a expressão condicional escolhe 0.
+Os dois retornos são a lista de linhas e o HTML com os três cartões.
+consultar_analise lê evento.row_value, valida se a linha contém o
+ID na quinta coluna e chama rever_analise. Devolve texto, pontos
+salvos e imagem. Para reordenar a tabela, atualize a lista dos
+cabeçalhos, a linha e o índice usado para consultar.
+
+3.6. Exportar
+
+caminho_exportacao usa Path e uuid4 para criar uma subpasta por
+download. exportar_imagem pede a renderização em resolução original
+e salva imagem-anotada.png. Sugestões em revisão só aparecem na
+prévia de contagem. exportar_csv grava resultados-cellcount.csv
+usando o gerenciador. Os dois métodos passam caminho e visible=True
+para o DownloadButton. A gravação em si ocorre antes dessa atualização.
+
+
+4. Android | O caminho de um toque e a ponte Python
+
+O guia 08 explica a instalação. O guia 09 explica as construções
+de Java e as classes do Android. Para seguir uma ação pelo código,
+abra TelaCellCount.java e procure pelo texto visível no botão.
+
+4.1. Tela, gestos e fila
+
+onCreate monta o cabeçalho, o menu de abas e as três áreas roláveis.
+montarContagem organiza cartões para total, imagem, detecção e
+registro. botao fornece aparência e recebe um Runnable com a ação.
+campo cria o rótulo ligado ao EditText e determina o teclado.
+abrirAba alterna a visibilidade das telas e atualiza a aba escolhida.
+
+escolherImagem pede um arquivo ao Android. onActivityResult recebe
+o URI selecionado. carregar copia os bytes para o cache, verifica
+a extensão e chama a sessão Python por sessao().callAttr(...).
+O seletor de exportação usa a mesma função de retorno, com códigos
+distintos. executar inicia o trabalho no ExecutorService e devolve
+um Runnable para atualizar as vistas na thread da interface.
+
+ImagemAnalisavel guarda o retângulo que contém a imagem. ajustar
+calcula a escala que permite ver a prévia inteira. aplicarZoom
+muda tamanho e posição mantendo o foco do gesto. encaixar limita
+o deslocamento para preservar o quadro útil. onDraw pinta a
+prévia no retângulo. onSingleTapUp converte um toque dentro do
+retângulo em X e Y da prévia, inclusive após zoom. Toque chama
+TelaCellCount.marcar, que valida a distância e aciona editar.
+
+4.2. SessaoCelular
+
+__init__ guarda o gerenciador, o cache e o contador vazio. carregar
+cria um contador para o arquivo temporário e mantém o nome original
+de exibição. Quando troca a imagem, tenta remover a cópia temporária
+anterior. Se a remoção falhar com OSError, pass permite continuar.
+previa renderiza o PNG de trabalho e retorna o caminho. marcar usa
+revisar_clique e aproveita só a mensagem. Desfazer, limpar, detectar,
+incorporar e descartar chamam as mesmas operações de contador.py.
+
+salvar chama o gerenciador. historico entrega à tela um texto JSON
+com colunas resumidas. consultar usa rever_analise para obter os
+detalhes e a foto com os pontos. Quando há foto, salva uma prévia
+temporária. O JSON devolvido inclui título, detalhes, caminho da
+foto e uma string com as coordenadas. resultados entrega uma lista
+JSON com três números. exportar escolhe o desenho PNG original ou
+o método de CSV. TelaCellCount lê esses JSONs e copia os arquivos
+de exportação para o destino escolhido pelo usuário no Android.

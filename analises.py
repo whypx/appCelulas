@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from contador import ContadorCelulas, ERROS_IMAGEM
+
 
 class GerenciadorAnalises:
     CAMPOS_CSV = (
@@ -55,7 +57,7 @@ class GerenciadorAnalises:
         return sorted(registros, key=self.data_analise, reverse=True)
 
     def carregar_analise(self, identificador):
-        if not identificador.isalnum():
+        if not isinstance(identificador, str) or not identificador.isalnum():
             raise ValueError("Identificador de análise inválido.")
         caminho = self.pasta / f"{identificador}.json"
         with caminho.open(encoding="utf-8") as arquivo:
@@ -66,6 +68,21 @@ class GerenciadorAnalises:
 
     def caminho_imagem(self, registro):
         return self.pasta_imagens / Path(registro["arquivo_imagem"]).name
+
+    def rever_analise(self, registro):
+        data = self.data_analise(registro).strftime("%d/%m/%Y %H:%M:%S %z")
+        detalhes = (
+            f"Identificador: {registro['id']}\nAmostra: {registro['amostra']}\n"
+            f"Imagem: {registro['imagem']} ({registro['largura']} × {registro['altura']} px)\n"
+            f"Data e hora: {data}\nTotal de células: {registro['total']}\n"
+            f"Observações: {registro['observacoes'] or 'Sem observações'}"
+        )
+        try:
+            contador = ContadorCelulas(self.caminho_imagem(registro))
+        except ERROS_IMAGEM:
+            return detalhes + "\nImagem original indisponível.", None
+        contador.marcacoes = registro["marcacoes"]
+        return detalhes, contador.desenhar_marcadores()
 
     def texto_csv(self, texto):
         if texto.lstrip().startswith(("=", "+", "-", "@")) or texto.startswith(("\t", "\r", "\n")):

@@ -84,9 +84,9 @@ GerenciadorAnalises (analises.py) recebe um ContadorCelulas ao salvar.
 Lê atributos como nome e largura, chama obter_total() e copia a lista
 para o registro. Depois de anotada outra célula na aba Contagem, o
 registro salvo conserva a lista anterior. Para reabrir, a aplicação
-lê o dicionário e cria um contador separado com a imagem arquivada.
-Por fim, preenche as marcações desse objeto com os pontos do JSON e
-alimenta apenas a aba Histórico.
+pede o registro ao gerenciador. Em rever_analise, o próprio gerenciador
+cria um contador para a imagem arquivada, preenche os pontos do JSON
+e devolve a imagem para o Histórico do navegador ou do Android.
 
 Esta relação é de composição. A aplicação usa objetos das outras
 classes e delega o trabalho correspondente. Para trocar a cor do

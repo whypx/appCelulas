@@ -4,70 +4,32 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
-from PIL import Image
-
 import gradio as gr
-from analises import GerenciadorAnalises
-from contador import ContadorCelulas
 
+from analises import GerenciadorAnalises
+from contador import ContadorCelulas, ERROS_IMAGEM
+
+
+SEM_IMAGEM = "Carregue uma imagem para começar a análise."
 CSS = """
-.gradio-container { background: var(--body-background-fill); }
-#cabecalho {
-    padding: 12px 22px;
-    color: #fff;
-    background: linear-gradient(112deg, #102239, #193b62);
-    border-radius: 16px;
-}
-.marca { display: flex; align-items: center; gap: 15px; }
-.marca h1 { margin: 0; color: #fff; font-size: 30px; line-height: 1.1; }
-.marca p { margin: 5px 0 0; color: #dceafb; }
-.marca .projeto { margin-left: auto; font-size: 13px; color: #bcd7f3; }
-.simbolo {
-    display: grid; place-items: center; flex: 0 0 48px; height: 48px;
-    border-radius: 12px; background: #234e7c; color: #9de5ff;
-    font-size: 30px; line-height: 1;
-}
-.painel {
-    padding: 16px;
-    gap: 10px;
-    background: var(--block-background-fill);
-    border: 1px solid var(--border-color-primary);
-    border-radius: 14px;
-}
-.painel h2 { margin: 0; font-size: 19px; }
-#visualizacao { background: var(--background-fill-secondary); border-radius: 12px; }
-#visualizacao img { cursor: crosshair; }
-.indicador {
-    min-height: 106px;
-    padding: 14px 18px;
-    border: 1px solid var(--border-color-primary);
-    border-radius: 12px;
-    background: var(--background-fill-secondary);
-    color: var(--body-text-color);
-}
-.indicador span { display: block; color: inherit; font-size: 14px; font-weight: 600; }
-.indicador strong {
-    display: block; color: inherit; font-size: 42px; line-height: 1.2;
-    font-variant-numeric: tabular-nums;
-}
-#contagem-principal .indicador {
-    color: #fff; background: #1c4ea0; border-color: #1c4ea0;
-}
-@media (max-width: 640px) {
-    #cabecalho { padding: 16px; }
-    .marca { flex-wrap: wrap; gap: 10px; }
-    .marca .projeto { margin-left: 0; }
-    .painel { padding: 12px; }
-}
+#marca { padding: 14px 22px; border-radius: 16px; color: #fff;
+  background: linear-gradient(110deg, #112540, #214b78); }
+#marca h1 { color: #fff; margin: 0; font-size: 30px; }
+#marca p { color: #dceafb; margin: 4px 0; }
+.painel { padding: 14px; border: 1px solid var(--border-color-primary);
+  border-radius: 14px; background: var(--block-background-fill); }
+#imagem { background: var(--background-fill-secondary); border-radius: 12px; }
+#imagem img { cursor: crosshair; }
+.medidas { display: flex; flex-wrap: wrap; gap: 12px; }
+.medida { flex: 1 1 160px; padding: 12px 16px; border-radius: 12px;
+  border: 1px solid var(--border-color-primary); background: var(--background-fill-secondary); }
+.medida strong { display: block; font-size: 36px; line-height: 1.2; }
+#total .medida { background: #2053a7; border-color: #2053a7; }
+#total .medida span, #total .medida strong { color: #fff; }
 """
 
 
 class AplicacaoCellCount:
-    """Conecta a interface ao contador da sessão e ao histórico em disco."""
-
-    SEM_IMAGEM = "Carregue uma imagem para começar a análise."
-    ERROS_IMAGEM = (OSError, ValueError, Image.DecompressionBombError)
-
     def __init__(self, pasta_dados=None):
         if pasta_dados is None:
             pasta_dados = Path(__file__).resolve().parent / "dados"
@@ -75,283 +37,231 @@ class AplicacaoCellCount:
         self.exportacoes = TemporaryDirectory(prefix="cellcount-")
         self.interface = self.construir_interface()
 
-    def indicador(self, titulo, total):
-        return (
-            '<div class="indicador" aria-live="polite">'
-            f"<span>{titulo}</span><strong>{total}</strong></div>"
-        )
+    def medida(self, rotulo, total):
+        return f'<div class="medida" aria-live="polite"><span>{rotulo}</span><strong>{total}</strong></div>'
 
     def construir_interface(self):
-        with gr.Blocks(title="CellCount", analytics_enabled=False) as interface:
-            # Cada aba do navegador tem seu próprio objeto ContadorCelulas.
+        with gr.Blocks(title="CellCount", analytics_enabled=False) as tela:
             estado = gr.State()
             gr.HTML(
-                '<header class="marca">'
-                '<span class="simbolo" aria-hidden="true">⊙</span>'
-                "<div><h1>CellCount</h1><p>Sistema de Contagem e Análise Celular</p></div>"
-                '<p class="projeto">PIBIC-EM / UFRN</p></header>',
-                elem_id="cabecalho",
+                "<h1>CellCount</h1><p>Sistema de Contagem e Análise Celular · PIBIC-EM / UFRN</p>",
+                elem_id="marca",
             )
-
-            with gr.Tab("Contagem"):  # noqa: SIM117
-                with gr.Row():
-                    with gr.Column(scale=3, min_width=330, elem_classes="painel"):
-                        gr.Markdown("## Imagem microscópica")
-                        arquivo = gr.File(
-                            label="Carregar imagem · PNG, JPG, JPEG ou TIFF",
-                            file_types=list(ContadorCelulas.FORMATOS), type="filepath",
-                            height=112, elem_id="carregamento",
-                        )
-                        info_imagem = gr.Textbox(
-                            label="Arquivo e resolução", interactive=False, max_lines=1,
-                        )
-                        visualizacao = gr.Image(
-                            type="pil", format="png", interactive=False, show_label=False,
-                            height="clamp(320px, 44vh, 520px)", buttons=["fullscreen"],
-                            elem_id="visualizacao",
-                            alt_text="Imagem microscópica para contagem manual de células",
-                        )
+            with gr.Tab("Contagem"), gr.Row():
+                with gr.Column(scale=3, min_width=330, elem_classes="painel"):
+                    arquivo = gr.File(
+                        label="Carregar imagem",
+                        file_types=list(ContadorCelulas.FORMATOS), height=128, elem_id="carregamento",
+                    )
+                    info = gr.Textbox(label="Arquivo e resolução", placeholder="PNG, JPEG ou TIFF", interactive=False)
+                    foto = gr.Image(format="png", interactive=False, show_label=False,
+                                    height="clamp(300px, 47vh, 520px)", buttons=["fullscreen"], elem_id="imagem",
+                                    alt_text="Imagem microscópica para marcar células")
+                    with gr.Row():
+                        desfazer = gr.Button("Desfazer")
+                        limpar = gr.Button("Limpar marcações")
+                with gr.Column(scale=2, min_width=280, elem_classes="painel"):
+                    total = gr.HTML(self.medida("Células marcadas", 0), elem_id="total")
+                    status = gr.Textbox(SEM_IMAGEM, label="Estado da análise", interactive=False)
+                    amostra = gr.Textbox(label="Nome da amostra")
+                    notas = gr.Textbox(label="Observações", lines=2)
+                    distancia = gr.Slider(0, 100, 8, step=1, label="Distância mínima (px)", info="0 desliga a proteção.")
+                    with gr.Accordion("Detecção assistida", open=False):
+                        gr.Markdown("Clique dentro de uma caixa para rejeitá-la e fora dela para marcar.")
+                        claras = gr.Checkbox(label="Células claras sobre fundo escuro")
+                        limiar = gr.Slider(0, 255, 128, step=1, label="Limiar de brilho")
                         with gr.Row():
-                            desfazer = gr.Button("Desfazer")
-                            limpar = gr.Button("Limpar marcações")
-
-                    with gr.Column(scale=2, min_width=280, elem_classes="painel"):
-                        total = gr.HTML(self.indicador("Células marcadas", 0), elem_id="contagem-principal")
-                        status = gr.Textbox(
-                            value=self.SEM_IMAGEM, label="Estado da análise", interactive=False,
-                        )
-                        amostra = gr.Textbox(label="Nome da amostra", placeholder="Ex.: Amostra A")
-                        observacoes = gr.Textbox(label="Observações", lines=4)
-                        distancia = gr.Slider(
-                            minimum=0, maximum=100, value=8, step=1, label="Distância mínima (px)",
-                            info="Em pixels da imagem original. Use 0 para permitir pontos próximos ou iguais.",
-                        )
-                        salvar = gr.Button("Salvar análise", variant="primary")
-                        exportar_png = gr.Button("Exportar imagem (PNG)")
-                        baixar_png = gr.DownloadButton("Baixar PNG", visible=False)
-
+                            minima = gr.Number(25, precision=0, label="Área mínima (px²)")
+                            maxima = gr.Number(0, precision=0, label="Área máxima (0 = livre)")
+                        detectar = gr.Button("Detectar possíveis células")
+                        with gr.Row():
+                            incorporar = gr.Button("Incorporar sugestões")
+                            descartar = gr.Button("Descartar todas")
+                    salvar = gr.Button("Salvar análise", variant="primary")
+                    gerar_png = gr.Button("Exportar imagem (PNG)")
+                    png = gr.DownloadButton("Baixar PNG", visible=False)
             with gr.Tab("Histórico") as aba_historico:
                 with gr.Column(elem_classes="painel"):
-                    gr.Markdown("## Análises registradas")
-                    resumo_historico = gr.Markdown("Nenhuma análise registrada.")
+                    gr.Markdown("Selecione uma linha da tabela para rever a análise.")
                     tabela = gr.Dataframe(
                         headers=["Amostra", "Imagem", "Células", "Data e hora", "Identificador"],
-                        datatype=["str", "str", "number", "str", "str"], value=[],
-                        interactive=False, show_label=False, buttons=[],
+                        datatype=["str", "str", "number", "str", "str"], value=[], interactive=False, buttons=[],
                     )
                     with gr.Row():
-                        exportar_csv = gr.Button("Exportar resultados (CSV)", variant="primary")
-                        baixar_csv = gr.DownloadButton("Baixar CSV", visible=False)
+                        gerar_csv = gr.Button("Exportar resultados (CSV)", variant="primary")
+                        csv = gr.DownloadButton("Baixar CSV", visible=False)
                 with gr.Row():
                     with gr.Column(elem_classes="painel"):
-                        gr.Markdown("## Dados da análise")
-                        detalhes = gr.Textbox(
-                            label="Registro selecionado", lines=7, interactive=False,
-                            placeholder="Selecione uma linha da tabela.",
-                        )
+                        detalhes = gr.Textbox(label="Registro selecionado", lines=7, interactive=False)
                         with gr.Accordion("Coordenadas em pixels (X, Y)", open=False):
-                            coordenadas = gr.Dataframe(
-                                headers=["X", "Y"], datatype="number", value=[],
-                                interactive=False, show_label=False, buttons=[],
-                            )
-                    with gr.Column(elem_classes="painel"):
-                        gr.Markdown("## Imagem da análise")
-                        imagem_historico = gr.Image(
-                            format="png", height=360, interactive=False, show_label=False,
-                            buttons=["fullscreen"],
-                        )
+                            pontos = gr.Dataframe(headers=["X", "Y"], datatype="number", value=[],
+                                                  interactive=False, buttons=[])
+                    foto_historico = gr.Image(label="Imagem da análise", format="png", height=360,
+                                              interactive=False, buttons=["fullscreen"])
+            with gr.Tab("Resultados") as aba_resultados:
+                resultados = gr.HTML()
 
-            with gr.Tab("Resultados") as aba_resultados:  # noqa: SIM117
-                with gr.Row(elem_classes="painel"):
-                    total_atual = gr.HTML(self.indicador("Células da análise atual", 0))
-                    total_analises = gr.HTML(self.indicador("Análises registradas", 0))
-                    total_celulas = gr.HTML(self.indicador("Células nas análises salvas", 0))
-
-            # Os eventos de edição usam a mesma fila, para manter a ordem dos cliques.
             fila = {"concurrency_id": "contagem", "concurrency_limit": 1, "api_visibility": "private"}
-            saidas_contagem = [estado, visualizacao, total, total_atual, status, baixar_png]
-            arquivo.change(
-                self.carregar_imagem, arquivo, saidas_contagem + [info_imagem, amostra, observacoes],
-                **fila,
-            )
-            visualizacao.select(
-                self.marcar_celula, [estado, distancia], saidas_contagem,
-                trigger_mode="multiple", show_progress="hidden", **fila,
-            )
-            desfazer.click(self.desfazer, estado, saidas_contagem, show_progress="hidden", **fila)
-            limpar.click(self.limpar, estado, saidas_contagem, show_progress="hidden", **fila)
-            gravacao = salvar.click(self.salvar, [estado, amostra, observacoes], status, **fila)
-            exportar_png.click(self.exportar_imagem, estado, [baixar_png, status], **fila)
+            saidas = [estado, foto, total, status, png]
+            arquivo.change(self.carregar_imagem, arquivo, saidas + [info, amostra, notas], **fila)
+            foto.select(self.marcar, [estado, distancia], saidas, trigger_mode="multiple", show_progress="hidden", **fila)
+            desfazer.click(self.desfazer, estado, saidas, show_progress="hidden", **fila)
+            limpar.click(self.limpar, estado, saidas, show_progress="hidden", **fila)
+            detectar.click(self.detectar, [estado, limiar, claras, minima, maxima], saidas, **fila)
+            incorporar.click(self.incorporar, [estado, distancia], saidas, **fila)
+            descartar.click(self.descartar, estado, saidas, **fila)
+            gravacao = salvar.click(self.salvar, [estado, amostra, notas], status, **fila)
+            gerar_png.click(self.exportar_imagem, estado, [png, status], **fila)
+            gr.on([tela.load, aba_historico.select, aba_resultados.select],
+                  self.atualizar_historico, estado, [tabela, resultados], **fila)
+            gravacao.success(self.atualizar_historico, estado, [tabela, resultados], **fila)
+            tabela.select(self.consultar_analise, outputs=[detalhes, pontos, foto_historico], **fila)
+            gerar_csv.click(self.exportar_csv, outputs=csv, **fila)
+        return tela
 
-            saidas_historico = [tabela, resumo_historico, total_analises, total_celulas]
-            gr.on(
-                [interface.load, aba_historico.select, aba_resultados.select],
-                self.atualizar_historico, outputs=saidas_historico,
-                show_progress="hidden", **fila,
-            )
-            gravacao.success(self.atualizar_historico, outputs=saidas_historico, **fila)
-            tabela.select(
-                self.consultar_analise, outputs=[detalhes, coordenadas, imagem_historico],
-                api_visibility="private",
-            )
-            exportar_csv.click(self.exportar_resultados, outputs=baixar_csv, api_visibility="private")
-        return interface
-
-    def atualizacao_contagem(self, contador, mensagem):
-        imagem = None
+    def atualizar_contagem(self, contador, mensagem):
+        foto = None
         total = 0
         if contador is not None:
-            imagem = contador.desenhar_marcadores()
+            foto = contador.desenhar_marcadores(mostrar_sugestoes=True)
             total = contador.obter_total()
-        return (
-            contador, imagem, self.indicador("Células marcadas", total),
-            self.indicador("Células da análise atual", total), mensagem,
-            gr.update(value=None, visible=False),
-        )
+        return contador, foto, self.medida("Células marcadas", total), mensagem, gr.update(value=None, visible=False)
+
+    def exibir_mensagem(self, mensagem):
+        return gr.skip(), gr.skip(), gr.skip(), mensagem, gr.skip()
 
     def carregar_imagem(self, caminho):
-        if caminho is None:
-            return self.atualizacao_contagem(None, self.SEM_IMAGEM) + ("", "", "")
-        try:
-            contador = ContadorCelulas(caminho)
-        except self.ERROS_IMAGEM:
-            mensagem = "Não foi possível abrir a imagem. Verifique o arquivo e use PNG, JPEG ou TIFF compatível."
-            return self.atualizacao_contagem(None, mensagem) + ("", "", "")
+        contador, info, mensagem = None, "", SEM_IMAGEM
+        if caminho:
+            try:
+                contador = ContadorCelulas(caminho)
+            except ERROS_IMAGEM:
+                mensagem = "Não foi possível abrir a imagem. Use PNG, JPEG ou TIFF compatível."
+            else:
+                info = f"{contador.nome} · {contador.largura} × {contador.altura} px"
+                mensagem = "Clique sobre a imagem para marcar uma célula."
+        return self.atualizar_contagem(contador, mensagem) + (info, "", "")
 
-        info = f"{contador.nome} · {contador.largura} × {contador.altura} px"
-        mensagem = "Clique sobre a imagem para marcar uma célula."
-        return self.atualizacao_contagem(contador, mensagem) + (info, "", "")
-
-    def sem_edicao(self, mensagem):
-        return gr.skip(), gr.skip(), gr.skip(), gr.skip(), mensagem, gr.skip()
-
-    def marcar_celula(self, contador, distancia, evento: gr.SelectData):
+    def marcar(self, contador, distancia, evento: gr.SelectData):
         if contador is None:
-            return self.sem_edicao(self.SEM_IMAGEM)
-        if not isinstance(evento.index, (list, tuple)) or len(evento.index) != 2:
-            return self.sem_edicao("Clique dentro da imagem para marcar uma célula.")
+            return self.exibir_mensagem(SEM_IMAGEM)
         try:
             x, y = evento.index
-            x, y = contador.coordenadas_originais(x, y)
+            mudou, mensagem = contador.revisar_clique(x, y, distancia)
         except (TypeError, ValueError):
-            return self.sem_edicao("Clique dentro da imagem para marcar uma célula.")
-        if not contador.adicionar_celula(x, y, distancia):
-            return self.sem_edicao("Marcação muito próxima. Ajuste a distância mínima se forem células diferentes.")
-        return self.atualizacao_contagem(contador, f"Célula marcada em ({x}, {y}).")
+            return self.exibir_mensagem("Clique dentro da imagem.")
+        if mudou:
+            return self.atualizar_contagem(contador, mensagem)
+        return self.exibir_mensagem(mensagem)
 
     def desfazer(self, contador):
         if contador is None:
-            return self.sem_edicao(self.SEM_IMAGEM)
-        if not contador.desfazer_marcacao():
-            return self.sem_edicao("Nenhuma marcação para desfazer.")
-        return self.atualizacao_contagem(contador, "Última marcação removida.")
+            return self.exibir_mensagem(SEM_IMAGEM)
+        if contador.desfazer_marcacao():
+            return self.atualizar_contagem(contador, "Última marcação removida.")
+        return self.exibir_mensagem("Nenhuma marcação para desfazer.")
 
     def limpar(self, contador):
         if contador is None:
-            return self.sem_edicao(self.SEM_IMAGEM)
+            return self.exibir_mensagem(SEM_IMAGEM)
         contador.limpar_marcacoes()
-        return self.atualizacao_contagem(contador, "Marcações limpas.")
+        return self.atualizar_contagem(contador, "Marcações limpas.")
 
-    def salvar(self, contador, amostra, observacoes):
+    def detectar(self, contador, limiar, claras, minima, maxima):
         if contador is None:
-            raise gr.Error(self.SEM_IMAGEM)
-        if not amostra.strip():
-            raise gr.Error("Informe o nome da amostra antes de salvar.")
+            return self.exibir_mensagem(SEM_IMAGEM)
+        if minima is None or maxima is None or minima < 1 or maxima < 0 or 0 < maxima < minima:
+            return self.exibir_mensagem("A área mínima deve ser pelo menos 1. Use máxima de 0 ou igual ou superior à mínima.")
+        quantidade = contador.detectar_celulas(limiar, claras, minima, maxima)
+        return self.atualizar_contagem(contador, f"Sugestões para revisar · {quantidade}")
+
+    def incorporar(self, contador, distancia):
+        if contador is None:
+            return self.exibir_mensagem(SEM_IMAGEM)
+        pendentes = len(contador.sugestoes)
+        if not pendentes:
+            return self.exibir_mensagem("Nenhuma sugestão para incorporar.")
+        adicionadas = contador.incorporar_sugestoes(distancia)
+        ignoradas = pendentes - adicionadas
+        return self.atualizar_contagem(contador, f"Incorporadas · {adicionadas}. Ignoradas pela distância · {ignoradas}.")
+
+    def descartar(self, contador):
+        if contador is None:
+            return self.exibir_mensagem(SEM_IMAGEM)
+        contador.sugestoes.clear()
+        return self.atualizar_contagem(contador, "Sugestões descartadas.")
+
+    def salvar(self, contador, amostra, notas):
+        if contador is None:
+            raise gr.Error(SEM_IMAGEM)
+        if not (amostra or "").strip():
+            raise gr.Error("Informe o nome da amostra.")
         try:
-            self.analises.salvar_analise(contador, amostra, observacoes)
+            self.analises.salvar_analise(contador, amostra, notas or "")
         except OSError as erro:
-            raise gr.Error("Não foi possível salvar. Verifique a imagem e a pasta dados.") from erro
-        return "Análise salva. O registro está disponível na aba Histórico."
+            raise gr.Error("Não foi possível salvar a análise.") from erro
+        return "Análise salva. Consulte a aba Histórico."
 
-    def atualizar_historico(self):
+    def atualizar_historico(self, contador):
+        linhas = []
+        total_salvo = 0
         try:
-            registros = self.analises.listar_analises()
-            linhas = []
-            total_celulas = 0
-            for registro in registros:
+            for registro in self.analises.listar_analises():
                 data = self.analises.data_analise(registro).strftime("%d/%m/%Y %H:%M:%S %z")
-                linhas.append([
-                    registro["amostra"], registro["imagem"], registro["total"], data, registro["id"],
-                ])
-                total_celulas += registro["total"]
+                linhas.append([registro["amostra"], registro["imagem"], registro["total"], data, registro["id"]])
+                total_salvo += registro["total"]
         except (OSError, ValueError, KeyError, TypeError) as erro:
-            raise gr.Error("Não foi possível ler o histórico. Verifique os arquivos JSON da pasta dados.") from erro
-
-        mensagem = "Nenhuma análise registrada."
-        if linhas:
-            mensagem = "Selecione uma linha para ver os dados e as marcações."
-        return (
-            linhas, mensagem, self.indicador("Análises registradas", len(linhas)),
-            self.indicador("Células nas análises salvas", total_celulas),
+            raise gr.Error("Não foi possível ler o histórico.") from erro
+        atual = contador.obter_total() if contador is not None else 0
+        resultados = (
+            self.medida("Células da análise atual", atual)
+            + self.medida("Análises registradas", len(linhas))
+            + self.medida("Células nas análises salvas", total_salvo)
         )
+        return linhas, f'<div class="medidas">{resultados}</div>'
 
     def consultar_analise(self, evento: gr.SelectData):
-        if not evento.row_value:
+        linha = evento.row_value
+        if not linha or len(linha) < 5 or not linha[4]:
             return gr.skip(), gr.skip(), gr.skip()
-        identificador = evento.row_value[4]
         try:
-            registro = self.analises.carregar_analise(identificador)
-            data = self.analises.data_analise(registro).strftime("%d/%m/%Y %H:%M:%S %z")
-            detalhes = (
-                f"Identificador: {registro['id']}\n"
-                f"Amostra: {registro['amostra']}\n"
-                f"Imagem: {registro['imagem']} ({registro['largura']} × {registro['altura']} px)\n"
-                f"Data e hora: {data}\n"
-                f"Total de células: {registro['total']}\n"
-                f"Observações: {registro['observacoes'] or 'Sem observações'}"
-            )
-            pontos = registro["marcacoes"]
-            caminho = self.analises.caminho_imagem(registro)
+            registro = self.analises.carregar_analise(linha[4])
+            detalhes, foto = self.analises.rever_analise(registro)
+            return detalhes, registro["marcacoes"], foto
         except (OSError, ValueError, KeyError, TypeError) as erro:
             raise gr.Error("Não foi possível abrir o registro selecionado.") from erro
 
-        try:
-            contador = ContadorCelulas(caminho)
-            contador.marcacoes = pontos
-            imagem = contador.desenhar_marcadores()
-        except self.ERROS_IMAGEM:
-            imagem = None
-            detalhes += "\nImagem original indisponível. Os dados da análise foram preservados."
-        return detalhes, pontos, imagem
-
     def caminho_exportacao(self, nome):
-        # Uma pasta por exportação mantém os arquivos de sessões diferentes separados.
         pasta = Path(self.exportacoes.name) / uuid4().hex
         pasta.mkdir()
         return pasta / nome
 
     def exportar_imagem(self, contador):
         if contador is None:
-            return gr.update(value=None, visible=False), self.SEM_IMAGEM
+            return gr.update(value=None, visible=False), SEM_IMAGEM
         try:
             destino = self.caminho_exportacao("imagem-anotada.png")
             contador.desenhar_marcadores(resolucao_original=True).save(destino)
-        except self.ERROS_IMAGEM as erro:
-            raise gr.Error("Não foi possível exportar o PNG. Verifique a imagem original.") from erro
-        return gr.update(value=str(destino), visible=True), "Imagem anotada disponível para baixar."
+        except ERROS_IMAGEM as erro:
+            raise gr.Error("Não foi possível exportar o PNG.") from erro
+        return gr.update(value=str(destino), visible=True), "Imagem pronta para baixar."
 
-    def exportar_resultados(self):
+    def exportar_csv(self):
         try:
             destino = self.caminho_exportacao("resultados-cellcount.csv")
             self.analises.exportar_csv(destino)
         except (OSError, ValueError, KeyError, TypeError) as erro:
-            raise gr.Error("Não foi possível exportar o CSV. Verifique a pasta dados.") from erro
+            raise gr.Error("Não foi possível exportar o CSV.") from erro
         return gr.update(value=str(destino), visible=True)
 
     def executar(self):
-        # No Colab, o Gradio usa um link temporário para alcançar o servidor do notebook.
-        no_colab = "COLAB_RELEASE_TAG" in os.environ or "google.colab" in sys.modules
-        tema = gr.themes.Soft(
-            primary_hue="blue", neutral_hue="slate", font=["Segoe UI", "system-ui", "sans-serif"],
-        ).set(
-            body_background_fill="#f2f6fb", body_background_fill_dark="#0d1726",
-            block_label_background_fill="#e7effa", block_label_text_color="#234777",
-            button_primary_background_fill="#2059b8",
-            button_primary_background_fill_hover="#174695",
+        colab = "COLAB_RELEASE_TAG" in os.environ or "google.colab" in sys.modules
+        tema = gr.themes.Soft(primary_hue="blue", neutral_hue="slate", font=["Segoe UI", "system-ui"]).set(
+            body_background_fill="#f1f5fa",
+            body_background_fill_dark="#0d1726",
+            button_primary_background_fill="#2053a7",
         )
-        self.interface.launch(
-            css=CSS, theme=tema, share=no_colab, debug=no_colab, footer_links=[],
-        )
+        self.interface.launch(css=CSS, theme=tema, share=colab, debug=colab, footer_links=[])
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-from PIL import Image
-
 from contador import ContadorCelulas
 from analises import GerenciadorAnalises
 
@@ -52,7 +50,7 @@ class SessaoCelular:
         total = self.contador.detectar_celulas(limiar, claras, area_minima, area_maxima)
         if total == 0:
             return "Nenhuma sugestão. Ajuste o contraste, o limiar ou a área."
-        return f"Sugestões para revisar nas caixas laranja · {total}"
+        return f"Sugestões para revisar · {total}"
 
     def incorporar(self, distancia):
         if not self.contador.sugestoes:
@@ -81,22 +79,12 @@ class SessaoCelular:
 
     def consultar(self, identificador):
         registro = self.analises.carregar_analise(identificador)
-        data = self.analises.data_analise(registro).strftime("%d/%m/%Y %H:%M:%S %z")
-        detalhes = (
-            f"Imagem: {registro['imagem']}\nData: {data}\n"
-            f"Total: {registro['total']} · {registro['largura']} × {registro['altura']} px\n"
-            f"Observações: {registro['observacoes'] or 'Sem observações'}"
-        )
+        detalhes, imagem = self.analises.rever_analise(registro)
         previa = ""
-        caminho = self.analises.caminho_imagem(registro)
-        try:
-            contador = ContadorCelulas(caminho)
-            contador.marcacoes = registro["marcacoes"]
+        if imagem is not None:
             destino = self.cache / "previa-historico.png"
-            contador.desenhar_marcadores().save(destino, compress_level=1)
+            imagem.save(destino, compress_level=1)
             previa = str(destino)
-        except (OSError, ValueError, Image.DecompressionBombError):
-            detalhes += "\nImagem original indisponível."
         pontos = []
         for x, y in registro["marcacoes"]:
             pontos.append(f"({x}, {y})")

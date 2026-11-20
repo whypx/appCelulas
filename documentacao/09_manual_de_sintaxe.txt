@@ -344,7 +344,7 @@ Tipos de erro usados no projeto
   supera o limite interno de segurança para quantidade de pixels.
 • gr.Error é usado para relatar a falha na interface do navegador.
 
-Em def marcar_celula(self, contador, distancia, evento: gr.SelectData),
+Em def marcar(self, contador, distancia, evento: gr.SelectData),
 os dois-pontos após evento introduzem uma anotação de tipo. Gradio
 usa a anotação para fornecer os dados do clique. Ela é diferente
 dos dois-pontos que iniciam o corpo de uma função.
@@ -443,7 +443,7 @@ O pacote instalado se chama Pillow e é importado pelo nome PIL.
   desenhar. .tobytes() dá os valores dos pixels em bytes.
 • ImageDraw.Draw(imagem) cria um desenhador. ellipse recebe o
   retângulo que delimita o círculo. rectangle desenha a caixa
-  laranja. outline é a cor da borda e width determina sua espessura.
+  roxa. outline é a cor da borda e width determina sua espessura.
   O centro do círculo fica visível porque o código só desenha bordas.
 • .save(destino) usa a extensão do arquivo para escolher o formato.
   A prévia do Android usa compress_level=1 no PNG para reduzir o
@@ -469,7 +469,7 @@ Estes componentes aparecem dentro de blocos with.
 • gr.File recebe o caminho da imagem. gr.Image mostra a prévia e
   envia um evento de seleção. type="pil" usa objetos Pillow.
 • gr.Textbox recebe ou apresenta texto. interactive=False deixa
-  o campo somente para leitura. gr.Radio permite uma escolha.
+  o campo somente para leitura. gr.Checkbox retorna True ou False.
   gr.Slider é um controle deslizante e gr.Number aceita números.
 • gr.Button dispara ações. gr.DownloadButton recebe o caminho
   de um arquivo pronto para o usuário baixar.
@@ -486,7 +486,7 @@ da imagem. evento.row_value traz a linha clicada no histórico.
 gr.on liga a mesma ação ao carregamento inicial e à seleção de abas.
 
 gr.skip() preserva um componente. gr.update(value=..., visible=...)
-altera valor e visibilidade. Em cliques muito próximos, sem_edicao
+altera valor e visibilidade. Em cliques muito próximos, exibir_mensagem
 atualiza apenas a mensagem, preservando a imagem. A configuração
 de fila executa uma edição por vez. trigger_mode="multiple" permite
 que cliques sucessivos sejam encaminhados. gr.themes.Soft(...).set(...)
@@ -499,9 +499,8 @@ Veja também o guia 04 para os exemplos completos dos eventos.
 1) A interface abre a imagem e cria um ContadorCelulas. __init__
    registra a resolução original e guarda uma prévia de até
    LIMITE_PREVIA pixels em cada lado.
-2) No navegador, marcar_celula recebe evento.index. Antes de usar a
-   dupla, isinstance(evento.index, (list, tuple)) verifica o tipo e
-   len(...) != 2 rejeita um valor com outra quantidade de elementos.
+2) No navegador, marcar desempacota evento.index em x e y. Se o
+   desempacotamento ou o cálculo falhar, o except mostra um aviso.
    No Android, ImagemAnalisavel calcula a dupla na prévia e a envia
    por SessaoCelular.marcar. Os dois chamam revisar_clique.
 3) coordenadas_originais valida os limites e converte para o
@@ -510,7 +509,7 @@ Veja também o guia 04 para os exemplos completos dos eventos.
    Some 0.5 para usar o centro do pixel da prévia e calcule Y com
    as alturas correspondentes.
 4) descartar_sugestao verifica primeiro se o clique cai dentro
-   de uma caixa laranja. Se houver, remove a caixa. Nos demais
+   de uma caixa roxa. Se houver, remove a caixa. Nos demais
    casos, adicionar_celula testa a distância nas coordenadas
    originais e faz self.marcacoes.append((x, y)) se puder confirmar.
 
@@ -533,7 +532,7 @@ do original, conforme o destino.
 
 8. ENTENDA A DETECÇÃO, O HISTÓRICO E AS EXPORTAÇÕES
 
-8.1. Da imagem até uma caixa laranja
+8.1. Da imagem até uma caixa roxa
 
 _criar_mascara percorre os 256 tons. Uma comparação decide se o tom
 recebe 255 (ativo) ou 0 (inativo). Por exemplo, para células escuras
@@ -579,16 +578,15 @@ uma célula da planilha, por exemplo [[10, 20], [30, 50]].
 
 9. ESTILO DO NAVEGADOR E CONFIGURAÇÕES
 
-HTML estrutura o cabeçalho e os indicadores. <header> identifica o
-cabeçalho. <div> contém elementos. <h1> e <p> representam o título
+HTML estrutura o cabeçalho e os indicadores. <div> contém elementos.
+<h1> e <p> representam o título
 e o parágrafo. <span> agrupa texto curto e <strong> destaca o
-número. </div>, por exemplo, fecha o elemento. class="indicador"
-permite aplicar estilo. aria-live="polite" auxilia leitores de
-tela a anunciar mudanças e aria-hidden="true" omite o ícone
-decorativo nessa leitura. Markdown usa ## para títulos.
+número. </div>, por exemplo, fecha o elemento. class="medida"
+permite aplicar estilo aos cartões. aria-live="polite" ajuda leitores
+de tela a anunciar as atualizações. Markdown apresenta instruções.
 
 Em CSS, um seletor escolhe os elementos. .painel é uma classe e
-#visualizacao é um identificador. ".indicador strong" escolhe
+#imagem é um identificador. ".medida strong" escolhe
 o strong dentro do indicador. Gradio associa os nomes por elem_id
 e elem_classes. Entre { e }, escreva pares como "color: #fff;".
 Em CSS, #46f6ff é uma cor hexadecimal. No código Python, # dentro
@@ -597,19 +595,16 @@ dessa string faz parte do texto e do seletor ou da cor.
 • color e background definem a cor do texto e o fundo. background
   aceita linear-gradient para misturar cores ao longo de um ângulo.
   var(--nome) busca um valor reutilizável fornecido pelo tema.
-• margin é a distância externa, padding é a interna. gap cria
+• margin é a distância externa e padding é a interna. gap cria
   espaço entre elementos. border adiciona uma borda e border-radius
-  arredonda os cantos. height e min-height ajustam a altura.
-• display: flex ou grid organiza elementos. align-items, flex-wrap,
-  flex e place-items ajudam no alinhamento e na quebra em telas
-  estreitas. Em propriedades de tamanho, px indica pixels, vh
+  arredonda os cantos. border-color ajusta a cor dessa borda.
+• display: flex organiza elementos. flex-wrap permite quebra em
+  telas estreitas. flex: 1 1 160px define como cada cartão ocupa
+  o espaço disponível. Em tamanhos, px indica pixels e vh
   usa uma fração da altura da janela e clamp limita entre três valores.
-• font-size, line-height e font-weight ajustam o texto.
-  font-variant-numeric: tabular-nums dá a mesma largura aos algarismos
-  nas fontes compatíveis. cursor: crosshair indica a área de marcação.
-• @media (max-width: 640px) aplica as regras internas a janelas
-  estreitas. Reinicie o servidor após alterar app.py para rever
-  o resultado.
+• font-size e line-height ajustam o texto. display: block põe o
+  número abaixo do rótulo. cursor: crosshair indica a área de marcação.
+  Reinicie o servidor após alterar app.py para rever o resultado.
 
 requirements.txt tem uma linha por pacote. == fixa a versão usada
 no computador. pip install -r requirements.txt lê todas as linhas
