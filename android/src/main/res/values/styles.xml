@@ -1,0 +1,10 @@
+<resources>
+    <style name="TemaCellCount" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#2456C5</item>
+        <item name="android:statusBarColor">#112540</item>
+        <item name="android:navigationBarColor">#112540</item>
+        <item name="android:windowBackground">#F1F5FA</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

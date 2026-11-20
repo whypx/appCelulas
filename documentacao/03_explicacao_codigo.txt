@@ -1,0 +1,564 @@
+CELLCOUNT — 03 | EXPLICAÇÃO DO CÓDIGO-FONTE
+===========================================
+
+Siga a ordem contador.py, analises.py e app.py. No VS Code, procure pelo
+nome do método com Ctrl+F. Os recortes mantêm as expressões do projeto.
+Para entender como testar cada mudança, combine este guia com o 07.
+
+
+1. contador.py | A imagem e os pontos de uma análise
+
+1.1. Importações, classe e constantes
+
+    from pathlib import Path
+    from PIL import Image, ImageChops, ImageDraw, ImageOps
+
+Path trabalha com caminhos no Windows e no Colab. Image decodifica a
+imagem, ImageOps corrige a orientação, ImageDraw desenha sobre a imagem
+em memória e ImageChops combina máscaras. A declaração
+`class ContadorCelulas:` abre o corpo da classe.
+O dicionário FORMATOS relaciona a extensão, com ponto inicial, ao formato
+que o Pillow informa. LIMITE_PREVIA é o máximo em pixels de cada lado.
+RAIO_MARCADOR, COR_MARCADOR e COR_CONTORNO definem estilo e tamanho.
+Para mudar só o desenho, edite essas três constantes. Para adicionar um
+formato, confirme a compatibilidade do Pillow e adicione a extensão com
+o formato correspondente. A interface lê as extensões desse dicionário.
+
+1.2. Criar o contador e a prévia em __init__
+
+    self.caminho = Path(caminho)
+    self.nome = self.caminho.name
+    self.extensao = self.caminho.suffix.lower()
+    self.marcacoes = []
+    self.sugestoes = []
+
+A entrada caminho é a localização do arquivo carregado ou da cópia da
+imagem no histórico. Path possibilita obter o último trecho com `.name`,
+e `.suffix` devolve a extensão. `.lower()` transforma PNG e png na mesma
+forma para a comparação. Os valores passam a fazer parte do objeto por
+meio de `self.`. `[]` cria listas novas para cada objeto, uma para as
+marcações confirmadas e outra para as sugestões pendentes.
+
+    imagem = self.abrir_imagem()
+    self.largura, self.altura = imagem.size
+    imagem.thumbnail((self.LIMITE_PREVIA, self.LIMITE_PREVIA))
+    self.previa = imagem
+
+abrir_imagem devolve um objeto Pillow orientado. A tupla `.size` tem dois
+inteiros e é desempacotada em largura e altura antes de reduzir a imagem.
+thumbnail recebe uma tupla com os dois limites e altera apenas a instância
+Pillow em memória. Mantém a proporção e pode deixar a imagem no tamanho
+original se ela já for pequena. A referência self.previa será copiada
+para desenhar sobre ela. Para testar outra resolução de prévia, altere
+LIMITE_PREVIA e compare o nome e a resolução exibidos em Contagem.
+
+1.3. Validar, orientar e preparar em abrir_imagem
+
+    with Image.open(self.caminho) as imagem:
+        formato_esperado = self.FORMATOS.get(self.extensao)
+        if formato_esperado is None or imagem.format != formato_esperado:
+            raise ValueError("O conteúdo da imagem não corresponde à extensão do arquivo.")
+        imagem = ImageOps.exif_transpose(imagem)
+
+`with` fecha o arquivo quando termina o bloco, mesmo se ocorrer um erro.
+`.get` devolve o formato associado à extensão ou None. `or` torna a
+condição verdadeira se pelo menos um dos testes for verdadeiro. `!=`
+compara o formato detectado com o esperado. `raise` interrompe o método
+e sinaliza o problema a quem chamou. `exif_transpose` devolve uma imagem
+em memória, aplicando rotações ou espelhamentos de orientação EXIF. O
+código usa a primeira página em um TIFF com várias páginas.
+
+    if imagem.mode.startswith("I") or imagem.mode == "F":
+        imagem = imagem.convert("F")
+        menor, maior = imagem.getextrema()
+
+Os modos I e I;16 representam tons inteiros de alta profundidade. F é
+o modo de ponto flutuante de Pillow. `.startswith("I")` cobre os modos
+com esse prefixo. convert("F") cria uma imagem cujos tons podem ser
+escalados em ponto flutuante. getextrema retorna os limites observados.
+O teste `menor < maior and float("-inf") < menor and maior < float("inf")`
+exige uma faixa positiva e finita antes de dividir pela diferença entre
+máximo e mínimo. float("inf") representa infinito positivo.
+
+    escala = 255 / (maior - menor)
+
+    def ajustar_tom(pixel):
+        return pixel * escala + (-menor * escala)
+
+    imagem = imagem.point(ajustar_tom)
+
+O ganho é calculado uma vez. A função interna usa as variáveis menor e
+escala do método, e point aplica essa transformação linear aos tons. O
+menor tom vira aproximadamente 0 e o maior, 255. `imagem.convert("L")`
+converte para 8 bits em escala de cinza mesmo se a faixa fosse constante.
+Essa transformação afeta a prévia e o PNG, enquanto o TIFF arquivado
+conserva os seus valores originais. Mude essa conversão somente se você
+souber qual faixa tonal quer mostrar nos seus arquivos.
+
+    if "A" in imagem.getbands() or "transparency" in imagem.info:
+        return imagem.convert("RGBA")
+    return imagem.convert("RGB")
+
+`in` procura a banda A (alfa) ou metadados de transparência. RGBA guarda
+RGB mais a transparência. RGB guarda as três cores. A conversão permite
+desenhar as mesmas cores em imagens que começaram em modos diferentes.
+O método é chamado em __init__ para criar a prévia e ao exportar o PNG.
+
+1.4. Converter pixels em coordenadas_originais
+
+    if not (0 <= x < self.previa.width and 0 <= y < self.previa.height):
+        raise ValueError("Clique dentro da imagem para marcar uma célula.")
+    x_original = int((x + 0.5) * self.largura / self.previa.width)
+    y_original = int((y + 0.5) * self.altura / self.previa.height)
+    return x_original, y_original
+
+As entradas X e Y estão em pixels da prévia. A comparação encadeada
+`0 <= x < ...` inclui zero e exclui o primeiro pixel além da borda.
+`and` exige que os dois eixos caibam na imagem. `not` inverte o resultado
+para sinalizar o caso inválido. Some 0.5 para usar o centro do pixel e
+multiplique pela razão entre original e prévia em cada eixo. int descarta
+a parte fracionária de um número positivo, selecionando o pixel original
+que contém o ponto. A tupla retornada alimenta marcar_celula em app.py.
+Se mudar o tamanho da prévia, a relação se ajusta com `.width` e `.height`.
+
+1.5. Registrar pontos em adicionar_celula
+
+    if distancia_minima > 0:
+        for x_anterior, y_anterior in self.marcacoes:
+            dx = x - x_anterior
+            dy = y - y_anterior
+            if dx ** 2 + dy ** 2 < distancia_minima ** 2:
+                return False
+
+Recebe X, Y e o limite já na escala de pixels originais. for desempacota
+cada ponto anterior. dx e dy são diferenças com sinal. `** 2` eleva ao
+quadrado. Comparar os quadrados evita calcular a raiz da soma. Se a
+distância for menor que o limite, return False encerra a operação antes
+de incluir o ponto. Igualdade passa pela regra. Limite 0 pula a busca.
+Para experimentar uma regra inclusiva, trocar `<` por `<=` passa a
+bloquear também os pontos exatamente no limite quando ele é positivo.
+
+    self.marcacoes.append((x, y))
+    return True
+
+• self é o objeto ContadorCelulas que recebeu a chamada.
+• marcacoes é o atributo lista desse objeto. O ponto em self.marcacoes
+  acessa o atributo. O segundo ponto acessa o método append da lista.
+• x e y são os valores fornecidos pelos parâmetros deste método.
+• A vírgula em (x, y) forma a tupla com uma coordenada em cada posição.
+  Os parênteses internos agrupam a dupla. Os parênteses externos chamam
+  append passando um único argumento, a tupla.
+• append acrescenta a tupla no final da própria lista. A extensão da
+  lista cresce em um e a nova marca é a primeira a sair com pop().
+• return True informa ao chamador que a contagem precisa ser redesenhada.
+
+revisar_clique recebe o ponto da prévia e converte para a imagem original.
+Primeiro tenta rejeitar uma caixa de sugestão que contém o clique.
+Em seguida, se a caixa não existir, tenta adicionar a célula. A saída
+tem dois valores, o booleano mudou e a mensagem. Computador e celular
+chamam o mesmo método para aplicar essas decisões.
+
+1.6. Desfazer, limpar e calcular o total
+
+    if self.marcacoes:
+        self.marcacoes.pop()
+        return True
+    return False
+
+desfazer_marcacao testa se a lista contém elementos antes de chamar pop().
+pop() tira o último item e o devolve. Aqui, o método ignora o ponto que
+saiu e devolve um booleano para a interface decidir se redesenha.
+Em limpar_marcacoes, `self.marcacoes.clear()` e `self.sugestoes.clear()`
+esvaziam as duas listas. O método termina implicitamente com None.
+`return len(self.marcacoes)` em obter_total
+usa a lista como única fonte de contagem. Depois de modificar a lista,
+chame obter_total() para ler o total sem precisar somar ou subtrair à mão.
+
+1.7. Detectar e revisar regiões de possíveis células
+
+    tons = self.previa.convert("L")
+    mascara = tons.point(tabela)
+
+_criar_mascara usa a prévia limpa e converte suas cores para tons de
+cinza de 0 a 255. O for com range(256) preenche tabela com 256 valores.
+Se claras for True, compara `tom >= limiar`. Para células escuras,
+compara `tom <= limiar`. O booleano selecionado decide se append
+acrescenta 255 ou 0. point troca cada tom pelo valor de sua posição em
+tabela. ImageChops.multiply combina essa máscara com a banda alfa
+quando a imagem é RGBA. Os pixels transparentes viram zero.
+
+Em detectar_celulas, getextrema devolve o menor e o maior valor da máscara. Se o maior for
+zero, ela está vazia. Se o menor for positivo, todos os pixels estão
+conectados e a região toca a borda. Nos dois casos o método devolve 0.
+bytearray guarda os valores em uma sequência editável. enumerate entrega
+o índice inicio e o valor ativo durante a busca. Um pixel diferente de
+zero inicia a chamada a _medir_regiao. Esse método coloca esse pixel
+em pilha, uma lista de trabalho.
+
+    y, x = divmod(pilha.pop(), largura)
+    area += 1
+    soma_x += x
+    soma_y += y
+
+O quociente da divisão é a linha Y e o resto é a coluna X. O código
+atualiza a área, a soma das coordenadas e os limites da caixa. Cada
+vizinho ativo acima, abaixo, à esquerda ou à direita entra na pilha
+com append. Quando um pixel entra, seu valor vira zero na lista para
+evitar revisitas. A imagem e a prévia continuam intactas.
+
+_medir_regiao devolve área, centro e caixa. O centro vem das médias
+`soma_x / area` e `soma_y / area`. Depois de medir a região,
+detectar_celulas pula caixas que tocam a borda.
+Multiplica a quantidade de pixels da região pelo produto das razões
+de largura e altura para estimar a área em pixels² da imagem original.
+Aplica os limites fornecidos e coordenadas_originais converte o
+centro. Cada item de sugestoes guarda `(ponto, caixa)`, com o ponto na
+escala original e a caixa na escala da prévia. O retorno é a quantidade
+de sugestões. Para estudar o efeito de vizinhos em diagonal, modifique
+a lista de deslocamentos `dx, dy` e compare componentes isolados.
+
+descartar_sugestao usa enumerate para achar a caixa do clique e remove
+o item correspondente com pop(indice). incorporar_sugestoes percorre os
+pontos, chama adicionar_celula para aplicar a mesma distância mínima
+da contagem manual e retorna quantos entraram. Ao final, limpa as caixas.
+
+1.8. Desenhar os marcadores
+
+    if resolucao_original:
+        imagem = self.abrir_imagem()
+        proporcao = max(self.largura / self.previa.width, self.altura / self.previa.height)
+    else:
+        imagem = self.previa.copy()
+        proporcao = 1
+
+O parâmetro resolucao_original usa False por padrão. Para o PNG, abrir
+o original permite renderizar nas dimensões completas. max escolhe a
+maior relação de tamanho para ajustar o raio dos círculos. Para a prévia,
+copy cria pixels independentes para preservar a base limpa. `round` dá
+um raio inteiro e max(1, round(proporcao)) garante borda de ao menos um
+pixel. `ImageDraw.Draw(imagem)` prepara o objeto que altera essa cópia.
+
+    for x, y in self.marcacoes:
+        cx = int((x + 0.5) * imagem.width / self.largura)
+        cy = int((y + 0.5) * imagem.height / self.altura)
+
+cx e cy são o centro do círculo na imagem de saída, que pode ser menor.
+Se a imagem tem o tamanho original, a divisão recupera o próprio X e Y.
+ellipse recebe uma caixa `(esquerda, topo, direita, base)` e desenha um
+círculo quando altura e largura são iguais. `outline=...` escolhe a cor
+da borda e `width=...` sua espessura. Primeiro vem o círculo escuro com
+espessura dobrada. A segunda caixa é menor em borda pixels de cada lado
+e recebe o anel ciano. A ausência de preenchimento mantém o centro
+visível. `return imagem` devolve o resultado ao Gradio ou à exportação.
+Para alterar o tamanho, ajuste RAIO_MARCADOR e confira se sobra centro.
+Quando `mostrar_sugestoes=True` e a saída é uma prévia, `rectangle`
+desenha as caixas laranja antes dos círculos. Exportação e histórico
+usam o valor padrão False e mostram apenas marcações confirmadas.
+
+
+2. analises.py | Histórico e exportação de dados
+
+2.1. Preparar o armazenamento
+
+csv e json leem ou escrevem formatos tabulares e estruturados. shutil
+copia o arquivo, datetime produz e interpreta datas, Path organiza
+caminhos e uuid4 gera identificadores independentes. A classe começa com:
+
+    self.pasta = Path(pasta)
+    self.pasta_imagens = self.pasta / "imagens"
+    self.pasta_imagens.mkdir(parents=True, exist_ok=True)
+
+`/` une segmentos de um Path. mkdir cria a pasta filha, `parents=True`
+cria os pais necessários e `exist_ok=True` aceita uma pasta já existente.
+O argumento pasta chega de app.py. Para testar sem mexer nas análises
+reais, forneça outra pasta ao criar AplicacaoCellCount.
+
+2.2. Montar o registro e publicá-lo em salvar_analise
+
+    identificador = uuid4().hex
+    arquivo_imagem = identificador + contador.extensao
+
+uuid4() produz um identificador aleatório, `.hex` devolve seu texto sem
+hífens e `+` acrescenta a extensão do arquivo. Assim duas imagens com o
+mesmo nome podem ser salvas em registros diferentes. O dicionário
+registro recebe id, amostra, imagem, arquivo_imagem, largura, altura,
+total, data_hora, observacoes e marcacoes. `strip()` tira espaços nas
+extremidades da amostra e observações. nome é o nome original mostrado,
+e arquivo_imagem é o nome usado no disco. `contador.obter_total()` lê
+a lista e `.copy()` faz uma cópia dos pontos. As tuplas não mudam, então
+essa cópia de lista basta para o registro. `datetime.now().astimezone()`
+obtém o horário do ambiente de execução com seu deslocamento de fuso.
+`isoformat(timespec="seconds")` converte a data para um texto legível por
+Python, incluindo segundos e fuso. Para adicionar uma informação, veja
+o exercício de área no guia 07.
+
+    shutil.copyfile(contador.caminho, imagem)
+    with temporario.open("w", encoding="utf-8") as arquivo:
+        json.dump(registro, arquivo, ensure_ascii=False, indent=2)
+    temporario.replace(destino)
+
+imagem, temporario e destino são caminhos distintos com o mesmo ID.
+copyfile grava a cópia intacta. `.open("w", ...)` abre para escrita.
+json.dump serializa o dicionário e converte tuplas em arrays JSON.
+ensure_ascii=False preserva escrita direta de acentos. indent=2 formata
+com recuo de dois espaços. O temporário tem extensão .tmp. replace muda
+o nome para .json após fechar a escrita. O histórico procura apenas .json.
+`try` envolve a escrita. `except OSError` trata falhas de arquivo. Cada
+`unlink(missing_ok=True)` tenta remover o arquivo parcial e ignora sua
+ausência. `raise` sozinho repassa o erro à interface. Em sucesso,
+`return registro` entrega o dicionário para uso pelo chamador.
+
+2.3. Listar, carregar e recuperar o caminho da imagem
+
+    for caminho in self.pasta.glob("*.json"):
+        registros.append(self.carregar_analise(caminho.stem))
+    return sorted(registros, key=self.data_analise, reverse=True)
+
+registros começa como lista vazia. glob filtra pela extensão. `.stem`
+fornece o nome antes da extensão, usado como identificador. carregar_analise
+verifica `identificador.isalnum()` antes de concatenar o nome com .json,
+impedindo separadores de caminho no identificador. `.open` sem modo
+explícito lê o arquivo. `json.load(arquivo)` devolve as estruturas
+Python. data_analise transforma o texto de `registro["data_hora"]` com
+datetime.fromisoformat. sorted cria uma lista ordenada usando esse
+método como chave. `reverse=True` põe os recentes primeiro. Se quiser
+inverter a ordem, ajuste reverse. caminho_imagem combina pasta_imagens
+com `Path(registro["arquivo_imagem"]).name`, que seleciona o nome final
+registrado para a cópia. Abrir o JSON funciona mesmo se essa cópia sumir.
+
+2.4. Preparar textos e exportar
+
+    if texto.lstrip().startswith(("=", "+", "-", "@")) or texto.startswith(("\t", "\r", "\n")):
+        return "'" + texto
+    return texto
+
+lstrip tira espaços do início para a verificação. startswith recebe
+uma tupla de prefixos e aceita qualquer um deles. `\t`, `\r` e `\n`
+representam tabulação, retorno de carro e quebra de linha. Se o texto
+puder ser lido como fórmula por uma planilha, texto_csv prefixa um
+apóstrofo para abrir como texto. O JSON continua com o valor registrado.
+
+    with destino.open("w", encoding="utf-8-sig", newline="") as arquivo:
+        escritor = csv.writer(arquivo)
+
+exportar_csv recebe um Path de saída e chama listar_analises para obter
+os registros. utf-8-sig coloca um sinal de codificação no início para
+facilitar a leitura de acentos em planilhas. newline="" deixa a biblioteca
+csv controlar as quebras, inclusive no Windows. writerow grava primeiro
+os nomes de CAMPOS_CSV. O laço `for campo in self.CAMPOS_CSV` lê
+os valores na mesma ordem. texto_csv trata os campos de TEXTOS_CSV.
+`json.dumps` transforma marcacoes em uma string JSON que ocupa uma
+célula do CSV. Para mudar a ordem das colunas, edite CAMPOS_CSV.
+app.py fornece o
+caminho e, após a escrita, oferece o arquivo para download.
+
+
+3. app.py | Interface, eventos e integração
+
+3.1. Importações, CSS e inicialização
+
+os permite ler variáveis de ambiente e sys fornece a lista de módulos já
+carregados. Path monta caminhos, TemporaryDirectory cria uma área de
+exportação temporária e uuid4 evita choque entre arquivos.
+gradio com apelido gr cria componentes e eventos. A importação de Image
+permite tratar `Image.DecompressionBombError`, sinal de imagem grande
+demais para o limite do Pillow. Os imports dos dois módulos locais dão à
+interface acesso às classes de contagem e armazenamento.
+
+CSS é uma string de aspas triplas. Os seletores #cabecalho,
+#visualizacao e #contagem-principal apontam para valores elem_id
+atribuídos no Gradio. .marca, .simbolo, .painel e .indicador se aplicam
+por classes. `var(...)` lê cores do tema. @media ajusta o cabeçalho e
+o espaçamento em telas estreitas. Alterar border-radius muda os cantos.
+
+    def __init__(self, pasta_dados=None):
+        if pasta_dados is None:
+            pasta_dados = Path(__file__).resolve().parent / "dados"
+
+__file__ contém o caminho do módulo app.py. resolve torna o caminho
+absoluto, parent vai à pasta que contém o módulo e `/ "dados"` aponta
+para a pasta padrão, independente da pasta atual do terminal. Passe
+outro caminho para usar dados isolados. O construtor cria self.analises,
+self.exportacoes e self.interface. TemporaryDirectory devolve um objeto,
+mantido enquanto a aplicação existir. A classe também guarda SEM_IMAGEM,
+mensagem reutilizada, e ERROS_IMAGEM, uma tupla de tipos de exceção.
+
+3.2. Indicador e componentes de construir_interface
+
+    return (
+        '<div class="indicador" aria-live="polite">'
+        f"<span>{titulo}</span><strong>{total}</strong></div>"
+    )
+
+indicador recebe um título fixo do aplicativo e um total. Strings
+adjacentes dentro dos parênteses formam uma só. A f-string insere título
+e número nas chaves. O HTML usa span para o texto, strong para o número
+e aria-live para anunciar a atualização. Mude títulos nos pontos de
+chamada ou o estilo do número na regra .indicador strong.
+
+`with gr.Blocks(title="CellCount", analytics_enabled=False) as interface`
+inicia o layout. `estado = gr.State()` separa o estado da contagem por
+sessão. O HTML seguinte cria o cabeçalho estático. Cada `with gr.Tab`
+cria uma aba. gr.Row reúne elementos lado a lado. gr.Column agrupa
+componentes na vertical e scale dá a largura relativa entre as colunas.
+gr.Markdown com ## cria os títulos menores da interface.
+
+• Contagem à esquerda. arquivo é gr.File, com extensões tiradas das
+  chaves de FORMATOS via `list(...)`. type="filepath" fornece o caminho
+  em texto. info_imagem é um Textbox de leitura. visualizacao é gr.Image
+  de saída, com imagem Pillow em PNG, botão de tela cheia e texto
+  alternativo. A altura CSS usa 44% da altura da janela, com mínimo de
+  320 e máximo de 520 pixels. Desfazer e Limpar marcações ocupam uma linha.
+• Contagem à direita. total recebe o HTML com o número. status é um
+  Textbox de leitura com o estado da análise. amostra e observacoes
+  recebem texto. O Slider tem mínimo, máximo, valor inicial e passo.
+  Salvar usa variant="primary". baixar_png é um DownloadButton que começa
+  invisível e só recebe o caminho de um arquivo quando a geração dá certo.
+• Histórico. tabela tem cabeçalhos em ordem fixa e tipos de coluna em
+  datatype. `value=[]` inicia a tabela sem registros. Texto de resumo,
+  exportação CSV e detalhes são componentes separados. Accordion esconde
+  a segunda tabela de coordenadas até que o usuário queira consultá-la.
+  imagem_historico usa a prévia renderizada a partir da imagem arquivada.
+• Resultados. Três gr.HTML usam indicador para mostrar a contagem atual,
+  número de registros e soma das células salvas. Começam em zero e são
+  atualizados pelos eventos correspondentes.
+
+Para modificar o layout, use as linhas e colunas. Mantenha compatíveis
+os tipos de componentes e os valores que os métodos devolvem.
+
+3.3. Conectar eventos em construir_interface
+
+    saidas_contagem = [estado, visualizacao, total, total_atual, status, baixar_png]
+
+Os eventos `.change`, `.select` e `.click` registram a referência a um
+método. O segundo argumento posicional, quando fornecido, é a entrada
+ou lista de entradas. O terceiro indica saídas, na ordem do return.
+`saidas_contagem + [info_imagem, amostra, observacoes]` concatena listas
+para o carregamento, que também muda informação e campos da amostra.
+`**fila` desempacota as opções do dicionário. concurrency_id igual e
+limite 1 põem as operações de edição na mesma fila. trigger_mode
+"multiple" recebe seleções sucessivas. show_progress="hidden" mantém a
+imagem disponível durante o redesenho. Os eventos usam API privada.
+
+`gravacao = salvar.click(...)` guarda a referência do evento. Seu
+`.success` atualiza as saídas do histórico só ao concluir a gravação.
+`gr.on` conecta interface.load e a seleção de duas abas à mesma função.
+tabela.select recebe dados da linha por gr.SelectData. Dois botões
+chamam as funções de exportação e preenchem componentes DownloadButton.
+O método retorna interface. Ao acrescentar uma saída de evento, ajuste
+as posições do retorno e das saídas no mesmo ponto do programa.
+
+3.4. Atualizar, carregar ou recusar um ponto
+
+    if contador is not None:
+        imagem = contador.desenhar_marcadores(mostrar_sugestoes=True)
+        total = contador.obter_total()
+
+atualizacao_contagem começa com imagem None e total 0. Se há contador,
+calcula a prévia e o total. Retorna a tupla com o estado, a imagem, dois
+HTMLs, a mensagem e `gr.update(value=None, visible=False)`, que esconde
+o PNG anterior ao editar. `sem_edicao` devolve seis valores na mesma
+ordem, mas gr.skip() preserva cada saída onde é aplicado. Só a mensagem
+muda. Use esse método para informar uma tentativa sem redesenhar.
+
+carregar_imagem recebe o caminho do File. Em None, devolve a atualização
+vazia somada à tupla `("", "", "")` de informação, nome e observações
+em branco. Um try busca construir o objeto. `except self.ERROS_IMAGEM`
+trata formatos inválidos e outros erros de abertura. No sucesso, a
+f-string info usa nome, largura e altura. A saída também zera os campos
+de nome e observações para uma nova amostra. Para mudar o texto de
+orientação, edite mensagem na condição desejada.
+
+    def marcar_celula(self, contador, distancia, evento: gr.SelectData):
+
+O tipo anotado fornece evento automaticamente ao método. contador e
+distancia vêm de estado e slider. Antes de converter, o método confere
+contador e verifica com isinstance e len se evento.index tem dois itens.
+`x_previa, y_previa = evento.index` lê a dupla. revisar_clique executa
+a conversão, a decisão e devolve mudou, mensagem. `except (TypeError, ValueError)`
+cobre coordenadas incompatíveis com o cálculo e pontos fora dos limites.
+Se mudou for True, atualizacao_contagem redesenha a prévia. Se for False,
+sem_edicao mantém os demais componentes. Ajuste as regras de clique
+em contador.py para que computador e celular usem a mesma lógica.
+
+Desfazer verifica None e consulta desfazer_marcacao. Sem ponto, usa
+sem_edicao com uma mensagem. Limpar verifica None e chama
+limpar_marcacoes. Os dois chamam atualizacao_contagem se modificarem ou
+esvaziarem a lista. A imagem aberta e os dados da amostra continuam.
+
+detectar, incorporar e descartar recebem o contador da sessão e usam
+as mesmas saídas dos outros botões de edição. detectar valida o intervalo
+de área e converte a escolha do Radio em um booleano com `contraste == "Claras"`.
+incorporar subtrai as adições do número de sugestões para informar
+quantos pontos a proteção de distância ignorou. descartar chama clear
+apenas em sugestoes, preservando a contagem confirmada.
+
+3.5. Salvar e consultar
+
+    amostra = (amostra or "").strip()
+    if not amostra:
+        raise gr.Error("Informe o nome da amostra antes de salvar.")
+
+salvar exige contador e nome com conteúdo. `or ""` converte um campo
+ausente em texto vazio e strip retira os espaços das extremidades.
+gr.Error é exibido pelo Gradio. Após validar, a função passa contador,
+amostra e as observações, que podem estar vazias, ao gerenciador.
+`except OSError as erro` dá um nome à exceção anterior.
+`raise ... from erro` preserva a causa junto à mensagem clara da tela.
+O return de sucesso alimenta status e permite atualizar o histórico.
+
+atualizar_historico cria `linhas = []` e `total_celulas = 0`. Para cada
+registro, strftime com `%d/%m/%Y %H:%M:%S %z` converte a data ao formato
+dia/mês/ano, hora:minuto:segundo e fuso. append adiciona uma lista com
+cinco valores na ordem da tabela. `+=` soma o total do registro ao
+acumulado. Se a leitura falhar, gr.Error informa o problema. Se as linhas
+existirem, troca a mensagem inicial por uma instrução de seleção. As
+saídas são a tabela, a mensagem e os dois indicadores de dados gravados.
+Se alterar as colunas, mantenha consistente o índice usado ao selecionar.
+
+    linha = evento.row_value
+    identificador = linha[4]
+
+consultar_analise recebe um evento da tabela. gr.skip preserva as
+saídas se a linha estiver vazia, incompleta ou sem identificador.
+Na lista, índice 4 é a quinta coluna, que contém o ID. O primeiro try
+lê o dicionário, monta detalhes com f-strings
+e quebras `\n`, e recupera a lista de pontos e o caminho da imagem.
+`registro['observacoes'] or 'Sem observações'` usa o segundo texto quando
+o primeiro está vazio. O segundo try cria um contador temporário e coloca
+os pontos guardados em `contador.marcacoes`. Ele gera a prévia como na
+contagem normal. Se o arquivo estiver indisponível, retorna imagem None
+e acrescenta uma mensagem aos detalhes. A saída afeta apenas os três
+componentes do histórico. Acrescente informações ao texto detalhes
+quando precisar exibir mais uma chave do registro.
+
+3.6. Exportar e executar
+
+    pasta = Path(self.exportacoes.name) / uuid4().hex
+    pasta.mkdir()
+    return pasta / nome
+
+caminho_exportacao cria uma subpasta temporária para cada pedido. Dois
+arquivos podem ter o mesmo nome de download sem ocupar o mesmo caminho.
+exportar_imagem recebe o contador do estado e verifica se existe. Seu
+try gera `desenhar_marcadores(resolucao_original=True).save(destino)`.
+O argumento True manda desenhar em tamanho original. `.save` encontra
+o formato pela extensão .png. exportar_resultados chama exportar_csv
+com o caminho para .csv. As duas funções retornam gr.update com o
+caminho convertido para string e visible=True, para exibir o arquivo
+no navegador. Mude o nome ali se quiser outro nome de download.
+
+executar procura COLAB_RELEASE_TAG em os.environ ou google.colab em
+sys.modules. Se encontrar algum deles, passa share e debug como True
+para o Gradio. No Windows, o servidor fica local. O tema Soft especifica
+paleta e fontes do sistema. `.set(...)` troca
+cores de fundo, rótulo e botão. `self.interface.launch` inicia o servidor
+com CSS, tema e footer_links=[] para omitir os links de rodapé.
+
+    if __name__ == "__main__":
+        AplicacaoCellCount().executar()
+
+Ao executar `python app.py`, Python define __name__ como "__main__" e
+chama executar na instância recém-criada. Ao importar a classe, a
+condição não se cumpre. Isso permite que o notebook Colab importe a
+classe e decida em qual célula iniciar o servidor.
