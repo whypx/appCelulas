@@ -5,13 +5,13 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from contador import ContadorCelulas, ERROS_IMAGEM
+from .contador import ContadorCelulas, ERROS_IMAGEM
 
 
 class GerenciadorAnalises:
     CAMPOS_CSV = (
         "id", "amostra", "imagem", "largura", "altura", "total",
-        "data_hora", "observacoes", "marcacoes",
+        "data_hora", "observacoes",
     )
     TEXTOS_CSV = ("amostra", "imagem", "observacoes")
 
@@ -21,11 +21,14 @@ class GerenciadorAnalises:
         self.pasta_imagens.mkdir(parents=True, exist_ok=True)
 
     def salvar_analise(self, contador, amostra, observacoes):
+        amostra = amostra.strip()
+        if not amostra:
+            raise ValueError("Informe o nome da amostra.")
         identificador = uuid4().hex
         arquivo_imagem = identificador + contador.extensao
         registro = {
             "id": identificador,
-            "amostra": amostra.strip(),
+            "amostra": amostra,
             "imagem": contador.nome,
             "arquivo_imagem": arquivo_imagem,
             "largura": contador.largura,
@@ -69,6 +72,13 @@ class GerenciadorAnalises:
     def caminho_imagem(self, registro):
         return self.pasta_imagens / Path(registro["arquivo_imagem"]).name
 
+    def apagar_analise(self, identificador):
+        registro = self.carregar_analise(identificador)
+        imagem = self.caminho_imagem(registro)
+        if imagem.stem == identificador:
+            imagem.unlink(missing_ok=True)
+        (self.pasta / f"{identificador}.json").unlink()
+
     def rever_analise(self, registro):
         data = self.data_analise(registro).strftime("%d/%m/%Y %H:%M:%S %z")
         detalhes = (
@@ -100,7 +110,5 @@ class GerenciadorAnalises:
                     valor = registro[campo]
                     if campo in self.TEXTOS_CSV:
                         valor = self.texto_csv(valor)
-                    elif campo == "marcacoes":
-                        valor = json.dumps(valor)
                     linha.append(valor)
                 escritor.writerow(linha)

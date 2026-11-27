@@ -1,9 +1,0 @@
-.venv*/
-.python*/
-__pycache__/
-*.pyc
-.gradle/
-.cellcount-build/
-build/
-local.properties
-analises-anteriores.zip

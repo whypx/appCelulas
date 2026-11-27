@@ -1,3 +1,4 @@
+from math import isfinite
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
@@ -37,11 +38,11 @@ class ContadorCelulas:
         if imagem.mode.startswith("I") or imagem.mode == "F":
             imagem = imagem.convert("F")
             menor, maior = imagem.getextrema()
-            if menor < maior and float("-inf") < menor and maior < float("inf"):
+            if isfinite(menor) and isfinite(maior) and menor < maior:
                 escala = 255 / (maior - menor)
 
                 def ajustar_tom(pixel):
-                    return pixel * escala + (-menor * escala)
+                    return (pixel - menor) * escala
 
                 imagem = imagem.point(ajustar_tom)
             imagem = imagem.convert("L")
@@ -60,10 +61,12 @@ class ContadorCelulas:
 
     def adicionar_celula(self, x, y, distancia_minima):
         if distancia_minima > 0:
+            limite_quadrado = distancia_minima ** 2
             for x_anterior, y_anterior in self.marcacoes:
                 dx = x - x_anterior
                 dy = y - y_anterior
-                if dx ** 2 + dy ** 2 < distancia_minima ** 2:
+                distancia_quadrada = dx ** 2 + dy ** 2
+                if distancia_quadrada < limite_quadrado:
                     return False
 
         self.marcacoes.append((x, y))
@@ -72,7 +75,7 @@ class ContadorCelulas:
     def marcar_na_previa(self, x_previa, y_previa, distancia_minima):
         x, y = self.coordenadas_originais(x_previa, y_previa)
         if self.adicionar_celula(x, y, distancia_minima):
-            return f"Célula marcada em ({x}, {y})."
+            return "Célula marcada."
         return "Marcação muito próxima. Ajuste a distância mínima se forem células diferentes."
 
     def desfazer_marcacao(self):

@@ -1,0 +1,43 @@
+[tool.briefcase]
+project_name = "Contador de Células"
+bundle = "br.cellcount"
+version = "2.1.4"
+author = "Gabriel Melo"
+license = "LicenseRef-Other"
+
+[tool.briefcase.app.app]
+formal_name = "Contador de Células"
+description = "Contagem manual de células em imagens de microscopia."
+sources = ["src/app"]
+requires = ["Pillow==11.0.0"]
+
+[tool.briefcase.app.app.windows]
+requires = ["toga-winforms==0.5.7"]
+
+[tool.briefcase.app.app.android]
+requires = ["toga-android==0.5.7"]
+min_os_version = "24"
+target_os_version = "34"
+version_code = 10
+android_abis = ["arm64-v8a", "x86_64"]
+icon.square = "recursos/icone"
+icon.round = "recursos/icone"
+icon.adaptive = "recursos/icone-adaptativo"
+accent_color = "#126B63"
+primary_color = "#142934"
+primary_color_dark = "#142934"
+splash_background_color = "#090712"
+build_gradle_extra_content = """
+android {
+    compileSdkVersion 35
+}
+
+chaquopy {
+    defaultConfig {
+        def pythonCellCount = System.getenv("CELLCOUNT_BUILD_PYTHON")
+        if (pythonCellCount) {
+            buildPython(pythonCellCount)
+        }
+    }
+}
+"""

@@ -1,14 +1,14 @@
-import json
 from pathlib import Path
 
-from contador import ContadorCelulas
-from analises import GerenciadorAnalises
+from .analises import GerenciadorAnalises
+from .contador import ContadorCelulas
 
 
 class SessaoCelular:
     def __init__(self, pasta_dados, pasta_cache):
         self.analises = GerenciadorAnalises(pasta_dados)
         self.cache = Path(pasta_cache)
+        self.cache.mkdir(parents=True, exist_ok=True)
         self.contador = None
 
     def carregar(self, caminho, nome):
@@ -16,7 +16,7 @@ class SessaoCelular:
         novo.nome = nome
         antigo = self.contador
         self.contador = novo
-        if antigo is not None:
+        if antigo is not None and antigo.caminho != novo.caminho and antigo.caminho.parent == self.cache:
             try:
                 antigo.caminho.unlink(missing_ok=True)
             except OSError:
@@ -29,9 +29,7 @@ class SessaoCelular:
         return self.contador.obter_total()
 
     def previa(self):
-        destino = self.cache / "previa-contagem.png"
-        self.contador.desenhar_marcadores().save(destino, compress_level=1)
-        return str(destino)
+        return self.contador.desenhar_marcadores()
 
     def marcar(self, x, y, distancia):
         return self.contador.marcar_na_previa(x, y, distancia)
@@ -56,27 +54,22 @@ class SessaoCelular:
                 "imagem": registro["imagem"], "total": registro["total"],
                 "data": self.analises.data_analise(registro).strftime("%d/%m/%Y %H:%M"),
             })
-        return json.dumps(linhas, ensure_ascii=False)
+        return linhas
 
     def consultar(self, identificador):
         registro = self.analises.carregar_analise(identificador)
-        detalhes, imagem = self.analises.rever_analise(registro)
-        previa = ""
-        if imagem is not None:
-            destino = self.cache / "previa-historico.png"
-            imagem.save(destino, compress_level=1)
-            previa = str(destino)
-        pontos = []
-        for x, y in registro["marcacoes"]:
-            pontos.append(f"({x}, {y})")
-        return json.dumps({
+        detalhes, previa = self.analises.rever_analise(registro)
+        return {
             "titulo": registro["amostra"], "detalhes": detalhes,
-            "previa": previa, "pontos": "\n".join(pontos),
-        }, ensure_ascii=False)
+            "previa": previa,
+        }
 
     def resultados(self):
         registros = self.analises.listar_analises()
-        return json.dumps([self.total(), len(registros), sum(r["total"] for r in registros)])
+        total_salvo = 0
+        for registro in registros:
+            total_salvo += registro["total"]
+        return self.total(), len(registros), total_salvo
 
     def exportar(self, tipo, destino):
         if tipo == "png":
