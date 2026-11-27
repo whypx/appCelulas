@@ -18,7 +18,7 @@ requires = ["toga-winforms==0.5.7"]
 requires = ["toga-android==0.5.7"]
 min_os_version = "24"
 target_os_version = "34"
-version_code = 10
+version_code = 29
 android_abis = ["arm64-v8a", "x86_64"]
 icon.square = "recursos/icone"
 icon.round = "recursos/icone"
